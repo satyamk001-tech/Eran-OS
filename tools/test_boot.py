@@ -41,7 +41,7 @@ IMG_FILE = os.path.join(BUILD_DIR, "eran_os.img")
 
 EXPECTED_BOOT_STRINGS = [
     "Eran OS Bootloader v0.4.0",
-    "[BOOT] 280 sectors (140 KB) loaded to 0x10000",
+    "[BOOT] 360 sectors (180 KB) loaded to 0x10000",
     "ERAN OS - KERNEL v0.4.0",
     "Target: x86 32-bit Protected Mode",
     "GDT active (Kernel/User Ring 0/3 segments + TSS 0x28).",
@@ -88,6 +88,7 @@ EXPECTED_SHELL_COMMANDS = [
     ("elfinfo /bin/hello.elf", "ELF32 EXECUTABLE BINARY HEADER"),
     ("ai who are you", "I am the Eran OS Native AI Assistant!"),
     ("aineural inspect memory and storage", "EMBEDDED MICRO-NEURAL MODEL INFERENCE DIAGNOSTICS"),
+    ("games", "ERAN OS RETRO ARCADE HUB"),
     ("syscall", "INT 0x80 successfully executed")
 ]
 

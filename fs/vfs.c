@@ -38,6 +38,9 @@ static vfs_node_t file_bin_date;
 static vfs_node_t file_bin_clear;
 static vfs_node_t file_bin_browser;
 static vfs_node_t file_bin_curl;
+static vfs_node_t file_bin_snake;
+static vfs_node_t file_bin_snakes;
+static vfs_node_t file_bin_spaceimpact;
 
 // /etc files
 static vfs_node_t file_hostname;
@@ -131,6 +134,9 @@ static const char script_date[]    = "#!/bin/sh\n# Print date and uptime\n";
 static const char script_clear[]   = "#!/bin/sh\n# Clear console screen\n";
 static const char script_browser[] = "#!/bin/sh\n# Eran OS Mini Linux Web Browser\n";
 static const char script_curl[]    = "#!/bin/sh\n# HTTP network fetcher\n";
+static const char script_snake[]   = "#!/bin/sh\n# Eran OS Retro Snake Arcade Game\nsnake\n";
+static const char script_snakes[]  = "#!/bin/sh\n# Eran OS Snakes and Ladders Board Game\nsnakes\n";
+static const char script_spaceimpact[] = "#!/bin/sh\n# Eran OS Space Impact Nokia 3310 Arcade Shooter\nspaceimpact\n";
 
 static const char dev_tty0_content[] = "Character Device: Standard VGA 80x25 Console\n";
 static const char dev_null_content[] = "Character Device: Null sink\n";
@@ -252,7 +258,10 @@ static void init_dir(vfs_node_t *node, const char *name, vfs_node_t *children, v
 // ---------------------------------------------------------------------------
 void vfs_init(void) {
     // 1. Initialize /bin files
-    init_file(&file_bin_curl,    "curl",      script_curl,    mystrlen(script_curl),    0);
+    init_file(&file_bin_spaceimpact, "spaceimpact", script_spaceimpact, mystrlen(script_spaceimpact), 0);
+    init_file(&file_bin_snakes,      "snakes",      script_snakes,      mystrlen(script_snakes),      &file_bin_spaceimpact);
+    init_file(&file_bin_snake,       "snake",       script_snake,       mystrlen(script_snake),       &file_bin_snakes);
+    init_file(&file_bin_curl,        "curl",        script_curl,        mystrlen(script_curl),        &file_bin_snake);
     init_file(&file_bin_browser, "browser",   script_browser, mystrlen(script_browser), &file_bin_curl);
     init_file(&file_bin_clear,   "clear",     script_clear,   mystrlen(script_clear),   &file_bin_browser);
     init_file(&file_bin_date,    "date",      script_date,    mystrlen(script_date),    &file_bin_clear);

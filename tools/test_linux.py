@@ -35,6 +35,8 @@ def run_test():
         ("whoami", "root"),
         ("which ls", "/bin/ls"),
         ("which browser", "/bin/browser"),
+        ("which snake", "/bin/snake"),
+        ("which spaceimpact", "/bin/spaceimpact"),
         ("env", "OS=EranOS-MiniLinux"),
         ("cat /etc/os-release", "PRETTY_NAME=\"Eran OS Mini Linux 0.4.0 (x86_32)\""),
         ("browser http://eranos.local/", "Welcome to Eran OS Web Portal"),

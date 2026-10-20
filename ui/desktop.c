@@ -12,6 +12,9 @@
 #include "../hal/acpi.h"
 #include "../user/micro_ai.h"
 #include "../net/browser.h"
+#include "../games/snake.h"
+#include "../games/snakes_ladders.h"
+#include "../games/space_impact.h"
 
 // ---------------------------------------------------------------------------
 // Window Types & Global Desktop State
@@ -214,7 +217,21 @@ static void term_execute_cmd(const char *cmd) {
     if (gui_strcmp(cmd, "help") == 0) {
         term_add_line("Mini Linux Commands:");
         term_add_line(" pwd, cd [dir], ls, cat <file>, browser [url]");
-        term_add_line(" uname, whoami, date, touch, write, chime, clear");
+        term_add_line(" snake, snakes, spaceimpact, games, chime");
+    } else if (gui_strcmp(cmd, "snake") == 0) {
+        term_add_line("Launching Retro Snake Arcade...");
+        snake_game_run();
+    } else if (gui_strcmp(cmd, "snakes") == 0 || gui_strcmp(cmd, "snakeladder") == 0) {
+        term_add_line("Launching Snakes & Ladders Board Game...");
+        snakes_ladders_run();
+    } else if (gui_strcmp(cmd, "spaceimpact") == 0 || gui_strcmp(cmd, "space") == 0) {
+        term_add_line("Launching Space Impact Nokia 3310 Shooter...");
+        space_impact_run();
+    } else if (gui_strcmp(cmd, "games") == 0 || gui_strcmp(cmd, "arcade") == 0) {
+        term_add_line("Eran OS Retro Games:");
+        term_add_line(" 1. snake       - Nokia Retro Snake");
+        term_add_line(" 2. snakes      - Snakes & Ladders (vs AI)");
+        term_add_line(" 3. spaceimpact - Space Impact Nokia Shooter");
     } else if (gui_strcmp(cmd, "pwd") == 0) {
         term_add_line(term_cwd);
     } else if (gui_strncmp(cmd, "cd", 2) == 0 && (cmd[2] == ' ' || cmd[2] == '\0')) {

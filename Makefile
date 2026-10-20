@@ -22,6 +22,7 @@ FS_DIR     := fs
 NET_DIR    := net
 UI_DIR     := ui
 USER_DIR   := user
+GAMES_DIR  := games
 PROC_DIR   := process
 TOOLS_DIR  := tools
 
@@ -64,6 +65,9 @@ KERNEL_OBJS := $(BUILD_DIR)/entry.o \
                $(BUILD_DIR)/longmode.o \
                $(BUILD_DIR)/ai_engine.o \
                $(BUILD_DIR)/micro_ai.o \
+               $(BUILD_DIR)/snake.o \
+               $(BUILD_DIR)/snakes_ladders.o \
+               $(BUILD_DIR)/space_impact.o \
                $(BUILD_DIR)/vfs.o
 
 .PHONY: all dirs clean run run-cli debug test test-ai run-ai help
@@ -214,6 +218,18 @@ $(BUILD_DIR)/ai_engine.o: $(USER_DIR)/ai_engine.c | dirs
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/micro_ai.o: $(USER_DIR)/micro_ai.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/snake.o: $(GAMES_DIR)/snake.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/snakes_ladders.o: $(GAMES_DIR)/snakes_ladders.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/space_impact.o: $(GAMES_DIR)/space_impact.c | dirs
 	@echo "  [CC]   $< -> $@"
 	$(CC) $(CFLAGS) -c $< -o $@
 

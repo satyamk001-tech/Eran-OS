@@ -26,6 +26,9 @@
 #include "../user/ai_engine.h"
 #include "../user/micro_ai.h"
 #include "../process/process.h"
+#include "../games/snake.h"
+#include "../games/snakes_ladders.h"
+#include "../games/space_impact.h"
 
 #define CMD_BUFFER_SIZE 128
 
@@ -110,9 +113,29 @@ static void cmd_help(void) {
     kprintf(" tcp               - Display TCP stream socket allocation table\n");
     kprintf(" chime / beep      - Play audio synthesized tones via PC Speaker\n");
     kprintf(" acpi / battery    - Power management & laptop battery telemetry\n");
+    kprintf(" snake             - Classic Nokia retro arcade Snake game\n");
+    kprintf(" snakes            - Snakes & Ladders 100-cell board game (Player vs AI)\n");
+    kprintf(" spaceimpact       - Space Impact Nokia 3310 retro arcade space shooter\n");
+    kprintf(" games             - Eran OS Arcade Gaming Hub\n");
     kprintf(" clear             - Clear the VGA text console\n");
     kprintf(" reboot / shutdown - System power management\n");
     kprintf("===================================================================\n");
+}
+
+static void cmd_games(void) {
+    vga_set_color(VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    kprintf("===================================================================\n");
+    kprintf("                    ERAN OS RETRO ARCADE HUB                       \n");
+    kprintf("===================================================================\n");
+    vga_set_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    kprintf(" 1. snake        - Classic Nokia Snake (W/A/S/D to move, apples, score)\n");
+    kprintf(" 2. snakes       - Snakes & Ladders (100 squares, Player vs Kernel AI)\n");
+    kprintf(" 3. spaceimpact  - Space Impact Nokia 3310 (Lasers, Bombs, Titan Boss)\n");
+    vga_set_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK);
+    kprintf(" Type any game command above to play! Press Q in-game to return.\n");
+    vga_set_color(VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    kprintf("===================================================================\n");
+    vga_set_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK);
 }
 
 static void cmd_version(void) {
@@ -390,6 +413,14 @@ void shell_execute(const char *cmdline) {
         audio_beep();
     } else if (strcmp(cmdline, "chime") == 0) {
         audio_chime();
+    } else if (strcmp(cmdline, "snake") == 0) {
+        snake_game_run();
+    } else if (strcmp(cmdline, "snakes") == 0 || strcmp(cmdline, "snakeladder") == 0 || strcmp(cmdline, "snakesandladders") == 0) {
+        snakes_ladders_run();
+    } else if (strcmp(cmdline, "spaceimpact") == 0 || strcmp(cmdline, "space") == 0) {
+        space_impact_run();
+    } else if (strcmp(cmdline, "games") == 0 || strcmp(cmdline, "arcade") == 0) {
+        cmd_games();
     } else if (strcmp(cmdline, "desktop") == 0) {
         desktop_interactive();
     } else if (strcmp(cmdline, "acpi") == 0) {

@@ -26,6 +26,8 @@ typedef enum {
     VGA_COLOR_WHITE         = 15,
 } vga_color_t;
 
+#define VGA_COLOR_YELLOW VGA_COLOR_LIGHT_BROWN
+
 void vga_init(void);
 void vga_clear(void);
 void vga_set_color(vga_color_t fg, vga_color_t bg);
