@@ -286,6 +286,20 @@ static void term_execute_cmd(const char *cmd) {
         gui_strncpy(buf + 8, num, 10);
         gui_strncpy(buf + gui_strlen(buf), "s", 3);
         term_add_line(buf);
+    } else if (gui_strncmp(cmd, "mouse", 5) == 0) {
+        const char *arg = cmd + 5;
+        while (*arg == ' ') arg++;
+        if (gui_strncmp(arg, "speed", 5) == 0) {
+            const char *val = arg + 5;
+            while (*val == ' ') val++;
+            if (*val == '1') { mouse_set_sensitivity(50); term_add_line("Mouse: Slow / Precision (50%)"); }
+            else if (*val == '2') { mouse_set_sensitivity(100); term_add_line("Mouse: Normal Desktop (100%)"); }
+            else if (*val == '3') { mouse_set_sensitivity(150); term_add_line("Mouse: Fast (150%)"); }
+            else if (*val == '4') { mouse_set_sensitivity(200); term_add_line("Mouse: High Speed (200%)"); }
+            else { term_add_line("Usage: mouse speed <1-4>"); }
+        } else {
+            term_add_line("Mouse: Normal Desktop 1:1 Pixel Mapping (100%)");
+        }
     } else if (gui_strcmp(cmd, "meminfo") == 0) {
         uint32_t total = pmm_get_total_memory_kb() / 1024;
         uint32_t used = pmm_get_used_memory_kb() / 1024;
@@ -524,14 +538,14 @@ static void draw_telemetry_pane(int x, int y, int w, int h) {
 
     const mouse_state_t *ms = mouse_get_state();
     if (ms) {
-        char mouse_str[24] = "Cursor: (";
+        char mouse_str[48] = "Mouse: (";
         char mxy[8];
         gui_u_to_str((uint32_t)ms->x, mxy);
-        gui_strncpy(mouse_str + 9, mxy, 4);
+        gui_strncpy(mouse_str + 8, mxy, 4);
         gui_strncpy(mouse_str + gui_strlen(mouse_str), ",", 2);
         gui_u_to_str((uint32_t)ms->y, mxy);
         gui_strncpy(mouse_str + gui_strlen(mouse_str), mxy, 4);
-        gui_strncpy(mouse_str + gui_strlen(mouse_str), ")", 2);
+        gui_strncpy(mouse_str + gui_strlen(mouse_str), ") | Desktop Normal (100%)", 28);
         gfx_draw_string(x + 2, y + 19, mouse_str, VGA_COLOR_DARK_GREY, bg);
     }
 }

@@ -383,8 +383,20 @@ void shell_execute(const char *cmdline) {
         ata_print_status();
     } else if (strcmp(cmdline, "usb") == 0) {
         usb_print_status();
-    } else if (strcmp(cmdline, "mouse") == 0) {
-        mouse_print_status();
+    } else if (strncmp(cmdline, "mouse", 5) == 0 && (cmdline[5] == ' ' || cmdline[5] == '\0')) {
+        const char *arg = cmdline + 5;
+        while (*arg == ' ') arg++;
+        if (strncmp(arg, "speed", 5) == 0) {
+            const char *val = arg + 5;
+            while (*val == ' ') val++;
+            if (*val == '1') { mouse_set_sensitivity(50); kprintf("[MOUSE] Sensitivity set to Slow / Precision (50%%).\n"); }
+            else if (*val == '2') { mouse_set_sensitivity(100); kprintf("[MOUSE] Sensitivity set to Normal Desktop (100%%).\n"); }
+            else if (*val == '3') { mouse_set_sensitivity(150); kprintf("[MOUSE] Sensitivity set to Fast (150%%).\n"); }
+            else if (*val == '4') { mouse_set_sensitivity(200); kprintf("[MOUSE] Sensitivity set to High Speed (200%%).\n"); }
+            else { kprintf("Usage: mouse speed <1-4> (1=Slow, 2=Normal, 3=Fast, 4=High)\n"); }
+        } else {
+            mouse_print_status();
+        }
     } else if (strcmp(cmdline, "devices") == 0) {
         pci_print_devices();
     } else if (strcmp(cmdline, "ifconfig") == 0) {

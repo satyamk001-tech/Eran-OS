@@ -21,4 +21,9 @@ const mouse_state_t *mouse_get_state(void);
 int  mouse_has_moved(void);
 void mouse_print_status(void);
 
+// Sensitivity controls: 1=Slow(50%), 2=Normal(100%), 3=Fast(150%), 4=High(200%)
+void mouse_set_sensitivity(int percent);
+int  mouse_get_sensitivity(void);
+void mouse_set_position(int x, int y);
+
 #endif /* ERAN_DRIVERS_MOUSE_H */

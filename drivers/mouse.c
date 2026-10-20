@@ -12,6 +12,13 @@ static uint8_t mouse_cycle = 0;
 static uint8_t mouse_bytes[3];
 static int mouse_moved = 0;
 
+// Sub-pixel fractional virtual coordinates (standard 640x400 VGA resolution)
+static int32_t virt_x = 320;
+static int32_t virt_y = 200;
+
+// Sensitivity multiplier in percent (100 = 1.0x normal desktop mapping)
+static int32_t mouse_sens = 100;
+
 static void mouse_wait(uint8_t type) {
     uint32_t timeout = 100000;
     if (type == 0) {
@@ -65,31 +72,50 @@ static void mouse_handler(registers_t *regs) {
             break;
 
         case 2:
-            mouse_bytes[2] = data;
             mouse_cycle = 0;
 
             // Decode 3-byte packet
             uint8_t flags = mouse_bytes[0];
             int32_t dx = (int32_t)mouse_bytes[1];
-            int32_t dy = (int32_t)mouse_bytes[2];
+            int32_t dy = (int32_t)data;
 
             if (flags & 0x10) dx |= 0xFFFFFF00; // Sign extend X
             if (flags & 0x20) dy |= 0xFFFFFF00; // Sign extend Y
+
+            // Sanity bounds check on relative delta packets
+            if (dx < -128 || dx > 127) dx = 0;
+            if (dy < -128 || dy > 127) dy = 0;
+
+            int32_t old_x = mouse_state.x;
+            int32_t old_y = mouse_state.y;
+            uint8_t old_btn = mouse_state.buttons;
 
             mouse_state.buttons = flags & 0x07;
             mouse_state.delta_x = dx;
             mouse_state.delta_y = dy;
 
-            // Adjust screen coordinates (VGA 80x25 characters)
-            mouse_state.x += (dx / 4);
-            mouse_state.y -= (dy / 4); // Y is inverted in screen space
+            // Apply smooth sub-pixel desktop scaling
+            // Font is 8x16 pixels per character cell
+            int32_t eff_dx = (dx * mouse_sens) / 100;
+            int32_t eff_dy = (dy * mouse_sens) / 100;
 
-            if (mouse_state.x < 0) mouse_state.x = 0;
+            virt_x += eff_dx;
+            virt_y -= eff_dy; // Y is inverted in screen space
+
+            if (virt_x < 0) virt_x = 0;
+            if (virt_x >= 640) virt_x = 639;
+            if (virt_y < 0) virt_y = 0;
+            if (virt_y >= 400) virt_y = 399;
+
+            mouse_state.x = virt_x / 8;
+            mouse_state.y = virt_y / 16;
+
             if (mouse_state.x >= 80) mouse_state.x = 79;
-            if (mouse_state.y < 0) mouse_state.y = 0;
             if (mouse_state.y >= 25) mouse_state.y = 24;
 
-            mouse_moved = 1;
+            if (mouse_state.x != old_x || mouse_state.y != old_y || mouse_state.buttons != old_btn || (flags & 0x07)) {
+                mouse_moved = 1;
+            }
             break;
     }
 }
@@ -97,11 +123,14 @@ static void mouse_handler(registers_t *regs) {
 void mouse_init(void) {
     mouse_state.x = 40;
     mouse_state.y = 12;
+    virt_x = 40 * 8 + 4;
+    virt_y = 12 * 16 + 8;
     mouse_state.buttons = 0;
     mouse_state.delta_x = 0;
     mouse_state.delta_y = 0;
     mouse_cycle = 0;
     mouse_moved = 0;
+    mouse_sens = 100;
 
     // 1. Enable auxiliary mouse device on 8042 controller
     mouse_wait(1);
@@ -134,6 +163,27 @@ void mouse_init(void) {
     register_interrupt_handler(44, mouse_handler);
 }
 
+void mouse_set_sensitivity(int percent) {
+    if (percent < 25) percent = 25;
+    if (percent > 300) percent = 300;
+    mouse_sens = percent;
+}
+
+int mouse_get_sensitivity(void) {
+    return mouse_sens;
+}
+
+void mouse_set_position(int x, int y) {
+    if (x < 0) x = 0;
+    if (x >= 80) x = 79;
+    if (y < 0) y = 0;
+    if (y >= 25) y = 24;
+    mouse_state.x = x;
+    mouse_state.y = y;
+    virt_x = x * 8 + 4;
+    virt_y = y * 16 + 8;
+}
+
 const mouse_state_t *mouse_get_state(void) {
     return &mouse_state;
 }
@@ -150,11 +200,17 @@ void mouse_print_status(void) {
     kprintf("===================================================================\n");
     kprintf(" Hardware Interface    : 8042 Auxiliary PS/2 Port (IRQ 12)\n");
     kprintf(" Packet Protocol       : Standard 3-Byte Relative Motion Stream\n");
+    kprintf(" Virtual Resolution    : 640x400 Sub-Pixel Framebuffer Precision\n");
+    kprintf(" Sensitivity Scaling   : %d%% (%s)\n", mouse_sens,
+            (mouse_sens <= 60) ? "Slow / Precision" :
+            (mouse_sens <= 120) ? "Normal Desktop (Standard)" :
+            (mouse_sens <= 180) ? "Fast" : "High Speed");
     kprintf(" Current Cursor (X, Y) : (%d, %d) [Grid 80x25]\n", mouse_state.x, mouse_state.y);
     kprintf(" Buttons State         : [Left:%s] [Right:%s] [Middle:%s]\n",
             (mouse_state.buttons & MOUSE_BTN_LEFT) ? "PRESSED" : "UP",
             (mouse_state.buttons & MOUSE_BTN_RIGHT) ? "PRESSED" : "UP",
             (mouse_state.buttons & MOUSE_BTN_MIDDLE) ? "PRESSED" : "UP");
     kprintf(" Delta Movement        : dX = %d, dY = %d\n", mouse_state.delta_x, mouse_state.delta_y);
+    kprintf(" Commands              : 'mouse speed <1-4>' (1=Slow, 2=Normal, 3=Fast, 4=High)\n");
     kprintf("===================================================================\n");
 }
