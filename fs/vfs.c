@@ -64,6 +64,7 @@ static vfs_node_t file_root_bashrc;
 static vfs_node_t file_www_index;
 static vfs_node_t file_www_about;
 static vfs_node_t file_www_help;
+static vfs_node_t file_www_search;
 
 // ---------------------------------------------------------------------------
 // File Content Constants
@@ -157,8 +158,21 @@ static const char www_index_content[] =
     "<li>Embedded Micro-Neural inference model running offline</li>"
     "<li>Interactive 2D graphical workstation desktop with mouse</li>"
     "<li>Mini Linux core utilities and HTML web browser</li>"
-    "</ul><hr><h2>Navigation Links</h2>"
-    "<p><a href=\"/var/www/about.html\">About Eran OS</a> | <a href=\"/var/www/help.html\">User Help Guide</a></p>"
+    "</ul><hr><h2>Interactive Navigation Links</h2>"
+    "<p><a href=\"/var/www/about.html\">1. About Eran OS Workstation</a></p>"
+    "<p><a href=\"/var/www/help.html\">2. Mini Linux User Manual</a></p>"
+    "<p><a href=\"search\">3. EranSearch Offline Index</a></p>"
+    "</body></html>";
+
+static const char www_search_content[] =
+    "<html><head><title>EranSearch Portal</title></head><body>"
+    "<h1>EranSearch Offline Portal</h1>"
+    "<p>Instant local search across all Eran OS subsystems.</p>"
+    "<h2>Quick Search Categories:</h2>"
+    "<p><a href=\"search linux\">1. Search Linux Shell & Core Utilities</a></p>"
+    "<p><a href=\"search tcp\">2. Search Networking & TCP Stack</a></p>"
+    "<p><a href=\"search ai\">3. Search Embedded Micro-Neural AI Core</a></p>"
+    "<p><a href=\"/var/www/index.html\">Back to Home Portal</a></p>"
     "</body></html>";
 
 static const char www_about_content[] =
@@ -279,7 +293,8 @@ void vfs_init(void) {
     init_dir(&root_user_dir, "root", &file_root_bashrc, &var_dir);
 
     // 6. Initialize /var and /var/www
-    init_file(&file_www_help,  "help.html",  www_help_content,  mystrlen(www_help_content),  0);
+    init_file(&file_www_search, "search.html", www_search_content, mystrlen(www_search_content), 0);
+    init_file(&file_www_help,  "help.html",  www_help_content,  mystrlen(www_help_content),  &file_www_search);
     init_file(&file_www_about, "about.html", www_about_content, mystrlen(www_about_content), &file_www_help);
     init_file(&file_www_index, "index.html", www_index_content, mystrlen(www_index_content), &file_www_about);
     init_dir(&www_dir, "www", &file_www_index, 0);

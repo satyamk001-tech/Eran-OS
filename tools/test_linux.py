@@ -39,7 +39,11 @@ def run_test():
         ("cat /etc/os-release", "PRETTY_NAME=\"Eran OS Mini Linux 0.4.0 (x86_32)\""),
         ("browser http://eranos.local/", "Welcome to Eran OS Web Portal"),
         ("browser http://eranos.local/about.html", "About Eran OS Workstation"),
-        ("browser http://eranos.local/help.html", "Mini Linux Command Reference")
+        ("browser http://eranos.local/help.html", "Mini Linux Command Reference"),
+        ("browser search", "EranSearch: Offline Knowledge Index"),
+        ("browser google.com", "External Web Notice: DNS & HTTPS"),
+        ("browser help", "Mini Linux Command Reference"),
+        ("browser about", "About Eran OS Workstation")
     ]
 
     for c, _ in test_commands:

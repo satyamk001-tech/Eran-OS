@@ -528,16 +528,28 @@ static void draw_browser_pane(int x, int y, int w, int h) {
     gfx_fill_rect(x + 2, y + 3, w - 4, 1, ' ', VGA_COLOR_WHITE, VGA_COLOR_DARK_GREY);
     gfx_draw_string(x + 2, y + 3, "URL:", VGA_COLOR_LIGHT_GREEN, VGA_COLOR_DARK_GREY);
     gfx_draw_string(x + 7, y + 3, browser_url_input, VGA_COLOR_WHITE, VGA_COLOR_DARK_GREY);
-    gfx_put_char(x + 7 + browser_url_len, y + 3, '_', VGA_COLOR_LIGHT_GREEN, VGA_COLOR_DARK_GREY);
+    if (active_win == WIN_BROWSER) {
+        gfx_put_char(x + 7 + browser_url_len, y + 3, '_', VGA_COLOR_LIGHT_GREEN, VGA_COLOR_DARK_GREY);
+    }
     if (w >= 36) {
         gfx_draw_string(x + w - 7, y + 3, "[GO]", VGA_COLOR_BLACK, VGA_COLOR_CYAN);
     }
 
-    // Navigation Buttons
-    gfx_draw_string(x + 2, y + 4, "[Home]", VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY);
-    gfx_draw_string(x + 9, y + 4, "[About]", VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY);
-    gfx_draw_string(x + 17, y + 4, "[Help]", VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY);
-    gfx_draw_string(x + 24, y + 4, "[200 OK]", VGA_COLOR_LIGHT_GREEN, bg);
+    // Navigation Buttons Toolbar
+    uint8_t back_fg = browser_can_go_back() ? VGA_COLOR_BLACK : VGA_COLOR_DARK_GREY;
+    uint8_t back_bg = browser_can_go_back() ? VGA_COLOR_LIGHT_GREY : VGA_COLOR_BLACK;
+    gfx_draw_string(x + 2, y + 4, "[Back]", back_fg, back_bg);
+    gfx_draw_string(x + 9, y + 4, "[Home]", VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY);
+    gfx_draw_string(x + 16, y + 4, "[About]", VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY);
+    gfx_draw_string(x + 24, y + 4, "[Help]", VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY);
+    if (w >= 48) {
+        gfx_draw_string(x + 31, y + 4, "[Search]", VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY);
+    }
+    if (w >= 60) {
+        uint8_t st_color = (bp->status_code == 200) ? VGA_COLOR_LIGHT_GREEN : VGA_COLOR_LIGHT_RED;
+        const char *st_text = (bp->status_code == 200) ? "[200 OK]" : "[Notice]";
+        gfx_draw_string(x + 40, y + 4, st_text, st_color, bg);
+    }
 
     // Rendered Web Page Viewport
     for (int i = 0; i < bp->line_count && y + 6 + i < y + h - 2; i++) {
@@ -545,10 +557,19 @@ static void draw_browser_pane(int x, int y, int w, int h) {
         if (bp->lines[i][0] == '=' && bp->lines[i][1] == '=') fg = VGA_COLOR_LIGHT_CYAN;
         else if (bp->lines[i][0] == '*') fg = VGA_COLOR_WHITE;
         else if (bp->lines[i][0] == '-' && bp->lines[i][1] == '-') fg = VGA_COLOR_DARK_GREY;
+
+        // Highlight lines containing interactive hyperlinks
+        for (int l = 0; l < bp->link_count; l++) {
+            if (bp->links[l].line == i) {
+                fg = VGA_COLOR_LIGHT_GREEN;
+                break;
+            }
+        }
+
         gfx_draw_string(x + 2, y + 6 + i, bp->lines[i], fg, bg);
     }
 
-    gfx_draw_string(x + 2, y + h - 2, "[Click [Home]/[About] or type URL & ENTER]", VGA_COLOR_DARK_GREY, bg);
+    gfx_draw_string(x + 2, y + h - 2, "[Click [GO]/[Links] or type query & press ENTER]", VGA_COLOR_DARK_GREY, bg);
 }
 
 // ---------------------------------------------------------------------------
@@ -878,20 +899,69 @@ void desktop_interactive(void) {
                             start_menu_open = 0;
                         }
                     }
-                    // Check Browser Navigation Buttons
-                    else if (active_win == WIN_BROWSER && ms->y == 6) {
-                        if (ms->x >= 3 && ms->x <= 9) {
-                            browser_navigate("http://eranos.local/index.html");
-                            gui_strcpy(browser_url_input, "http://eranos.local/index.html");
-                            browser_url_len = gui_strlen(browser_url_input);
-                        } else if (ms->x >= 10 && ms->x <= 17) {
-                            browser_navigate("http://eranos.local/about.html");
-                            gui_strcpy(browser_url_input, "http://eranos.local/about.html");
-                            browser_url_len = gui_strlen(browser_url_input);
-                        } else if (ms->x >= 18 && ms->x <= 25) {
-                            browser_navigate("http://eranos.local/help.html");
-                            gui_strcpy(browser_url_input, "http://eranos.local/help.html");
-                            browser_url_len = gui_strlen(browser_url_input);
+                    // Check Browser Navigation & Input Clicks
+                    else if (active_win == WIN_BROWSER) {
+                        int cur_w = is_maximized ? 77 : 48;
+
+                        // Row 5: Address Bar & [GO] button
+                        if (ms->y == 5) {
+                            if (ms->x >= cur_w - 7 && ms->x <= cur_w - 2) {
+                                // Clicked [GO]
+                                browser_navigate(browser_url_input);
+                                const browser_page_t *p = browser_get_current_page();
+                                gui_strncpy(browser_url_input, p->url, sizeof(browser_url_input));
+                                browser_url_len = gui_strlen(browser_url_input);
+                                audio_chime();
+                            } else if (ms->x >= 3 && ms->x < cur_w - 8) {
+                                // Clicked Address Bar: clear default to allow fast typing
+                                if (gui_strncmp(browser_url_input, "http://eranos.local", 19) == 0) {
+                                    browser_url_input[0] = '\0';
+                                    browser_url_len = 0;
+                                }
+                            }
+                        }
+                        // Row 6: Navigation Buttons Toolbar
+                        else if (ms->y == 6) {
+                            if (ms->x >= 3 && ms->x <= 8) {
+                                // [Back]
+                                if (browser_can_go_back()) {
+                                    browser_go_back();
+                                    const browser_page_t *p = browser_get_current_page();
+                                    gui_strncpy(browser_url_input, p->url, sizeof(browser_url_input));
+                                    browser_url_len = gui_strlen(browser_url_input);
+                                    audio_chime();
+                                }
+                            } else if (ms->x >= 10 && ms->x <= 15) {
+                                // [Home]
+                                browser_navigate("http://eranos.local/");
+                                gui_strcpy(browser_url_input, "http://eranos.local/");
+                                browser_url_len = gui_strlen(browser_url_input);
+                            } else if (ms->x >= 17 && ms->x <= 23) {
+                                // [About]
+                                browser_navigate("http://eranos.local/about.html");
+                                gui_strcpy(browser_url_input, "http://eranos.local/about.html");
+                                browser_url_len = gui_strlen(browser_url_input);
+                            } else if (ms->x >= 25 && ms->x <= 30) {
+                                // [Help]
+                                browser_navigate("http://eranos.local/help.html");
+                                gui_strcpy(browser_url_input, "http://eranos.local/help.html");
+                                browser_url_len = gui_strlen(browser_url_input);
+                            } else if (ms->x >= 32 && ms->x <= 39) {
+                                // [Search]
+                                browser_navigate("search");
+                                gui_strcpy(browser_url_input, "search");
+                                browser_url_len = gui_strlen(browser_url_input);
+                            }
+                        }
+                        // Rows 8-21: Clickable Hyperlinks in Page Viewport
+                        else if (ms->y >= 8 && ms->y <= 21 && ms->x >= 2 && ms->x < cur_w - 2) {
+                            int line_idx = ms->y - 8;
+                            if (browser_click_line(line_idx)) {
+                                const browser_page_t *p = browser_get_current_page();
+                                gui_strncpy(browser_url_input, p->url, sizeof(browser_url_input));
+                                browser_url_len = gui_strlen(browser_url_input);
+                                audio_chime();
+                            }
                         }
                     }
                     // Check Window Controls (Close [■] or Maximize [^])
@@ -985,6 +1055,9 @@ void desktop_interactive(void) {
                 } else if (active_win == WIN_BROWSER) {
                     if (c == '\n') {
                         browser_navigate(browser_url_input);
+                        const browser_page_t *p = browser_get_current_page();
+                        gui_strncpy(browser_url_input, p->url, sizeof(browser_url_input));
+                        browser_url_len = gui_strlen(browser_url_input);
                     } else if (c == '\b') {
                         if (browser_url_len > 0) {
                             browser_url_len--;
