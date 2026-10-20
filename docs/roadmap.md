@@ -17,7 +17,7 @@
 | **10** | Multitasking & User Mode | **COMPLETED** | Process Control Blocks (PCB), round-robin scheduler, TSS 0x28, `INT 0x80` system call gateway. |
 | **11** | Networking Stack | **COMPLETED** | Intel 82540EM (e1000) PCI NIC driver, Ethernet framing, ARP, IPv4, ICMP Echo ping, `ifconfig`. |
 | **12** | Audio & Sound Synthesis | **COMPLETED** | 8254 PIT Channel 2 square-wave sound synthesizer via port 0x42/0x61, `beep`, `chime`. |
-| **13** | Graphics & Desktop UI | **COMPLETED** | 2D graphics backbuffer canvas, double-buffered window manager, system taskbar, `desktop`. |
+| **13** | Graphics & Desktop UI | **COMPLETED** | 2D graphics backbuffer canvas, double-buffered CP437 window manager with 3D drop shadows, live workstation windows (AI, Terminal, Telemetry, Files), interactive Start Menu, and system taskbar (`desktop`). |
 | **14** | Laptop & Power Support | **COMPLETED** | ACPI RSDP/RSDT table parser in BIOS memory, soft power-off, battery telemetry (`battery`). |
 | **15** | AI Shell Prototype | **COMPLETED** | Host-side Ring 3 unprivileged AI shell, CLI REPL, schema planner, sandboxed executor. |
 | **16** | Offline AI Integration | **COMPLETED** | 100% offline deterministic NLP provider + local LLM adapter interface. |

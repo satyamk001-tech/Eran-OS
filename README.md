@@ -157,6 +157,19 @@ flowchart TD
 - **Multi-Turn Context:** Retains previous conversation query and state for context-aware assistant responses.
 - Command: `aineural <prompt>`.
 
+### 9. 2D Graphical Desktop Workstation & Window Compositor (`ui/desktop.c`, `drivers/gfx.c`)
+- **Double-Buffered Window Compositor:** Off-screen canvas (80x25 cells) blitted atomically to VGA text MMIO (`0xB8000`), completely eliminating visual tearing and flicker.
+- **CP437 Aesthetics & 3D Shading:** Authentic double-line borders (`╔═╗`, `║`, `╚═╝`), drop shadows with half-tone block shading (`0xB2` ▓), and interactive titlebars (`[■] Title [^]`).
+- **4 Integrated Workstation Applications:**
+  1. **Eran AI Productivity Core:** Live in-GUI natural language chat with real-time neural intent classification badges (`[INTENT: STORAGE_FILESYSTEM (96%)]`).
+  2. **Interactive GUI Shell Terminal:** In-window terminal console executing shell commands (`uptime`, `meminfo`, `ls`, `cat`, `touch`, `write`, `battery`, `acpi`, `chime`, `beep`, `clear`) with live scrollback.
+  3. **VFS File Explorer:** Directory tree browser (`/`, `/system`, `/bin`) with real-time file selection and interactive content preview panel.
+  4. **Hardware Telemetry & Gauges:** Real-time visual progress bars (`[█████████░] 94%`) for RAM, dynamic kernel heap, and ACPI laptop battery.
+- **Interactive Start Menu Pop-up:** Floating modal launcher (`[1]` AI, `[2]` Terminal, `[3]` Telemetry, `[4]` Files, `[5]` Chime, `[6]` Power Off, `[7]` Reboot, `[8]` Exit).
+- **System Taskbar & Menu Bar:** Top application menu bar with live uptime and battery indicators; bottom taskbar with window tabs, audio chime launcher, and view mode toggle (`[Split]` / `[Max]`).
+- **PS/2 Mouse & Keyboard Navigation:** Live arrow cursor sprite (`▲`), click detection for buttons/tabs/menu items, and keyboard navigation (`Tab`, `1-4`, `W/S`, `ESC`).
+- Command: `desktop`.
+
 ---
 
 ## 💻 Interactive Shell Command Reference (35+ Built-in Commands)
@@ -223,10 +236,13 @@ make test
 # 5. Run Offline AI Shell Test Suite
 make test-ai
 
-# 6. Run Interactive Host-Side Offline AI Shell
+# 6. Run Graphical Desktop UI & Compositor Test Suite
+make test-ui
+
+# 7. Run Interactive Host-Side Offline AI Shell
 make run-ai
 
-# 7. Clean Build Artifacts
+# 8. Clean Build Artifacts
 make clean
 ```
 
@@ -293,6 +309,21 @@ $ make test
 [PASS] Command 'syscall' -> Output matched: 'INT 0x80 successfully executed'
 =================================================================
 [RESULT] ALL OPERATING SYSTEM SUBSYSTEM TESTS PASSED.
+=================================================================
+
+$ make test-ui
+=================================================================
+  Eran OS - Graphical Desktop UI & Window Compositor Test Suite  
+=================================================================
+[TEST] Launching 2D Graphical Desktop via 'desktop' command...
+[TEST] Sending in-GUI commands (Terminal switch, uptime, audio chime)...
+[TEST] Sending ESC key (ASCII 27) to exit desktop back to text console...
+[TEST] Verifying shell is healthy after GUI exit via 'version' command...
+[PASS] Desktop launched: '[DESKTOP] Launching 2D graphical desktop workstation...'
+[PASS] Desktop exited: '[DESKTOP] Returned to text console.'
+[PASS] Shell healthy after GUI exit: 'Eran OS Kernel v0.4.0'
+=================================================================
+[RESULT] ALL GRAPHICAL DESKTOP UI TESTS PASSED SUCCESSFULLY.
 =================================================================
 ```
 

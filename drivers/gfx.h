@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "vga.h"
 
 #define CANVAS_WIDTH  80
 #define CANVAS_HEIGHT 25
@@ -17,7 +18,13 @@ void gfx_clear(uint8_t bg_color);
 void gfx_put_char(int x, int y, char ch, uint8_t fg, uint8_t bg);
 void gfx_draw_string(int x, int y, const char *str, uint8_t fg, uint8_t bg);
 void gfx_fill_rect(int x, int y, int w, int h, char fill_ch, uint8_t fg, uint8_t bg);
+
+// Window and Border Primitives
 void gfx_draw_box(int x, int y, int w, int h, uint8_t fg, uint8_t bg, const char *title);
+void gfx_draw_double_box(int x, int y, int w, int h, uint8_t fg, uint8_t bg, const char *title);
+void gfx_draw_shadow(int x, int y, int w, int h);
+void gfx_draw_progress_bar(int x, int y, int width, int percent, uint8_t fg, uint8_t bg);
+
 void gfx_flip_to_screen(void);
 
 #endif /* ERAN_DRIVERS_GFX_H */

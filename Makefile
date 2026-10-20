@@ -248,6 +248,10 @@ test: all
 test-ai:
 	$(PYTHON) $(TOOLS_DIR)/test_ai.py
 
+# Run Graphical Desktop UI Test Suite
+test-ui: all
+	$(PYTHON) $(TOOLS_DIR)/test_desktop.py
+
 # Run Interactive Offline AI Shell
 run-ai:
 	$(PYTHON) ai-shell/src/eran_shell/main.py
@@ -265,5 +269,6 @@ help:
 	@echo "  debug     - Launch QEMU with GDB server on localhost:1234"
 	@echo "  test      - Run automated kernel regression test suite"
 	@echo "  test-ai   - Run offline AI Shell test suite"
+	@echo "  test-ui   - Run graphical desktop UI test suite"
 	@echo "  run-ai    - Launch interactive offline AI productivity shell"
 	@echo "  clean     - Remove build artifacts"
