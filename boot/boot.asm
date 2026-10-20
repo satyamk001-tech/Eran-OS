@@ -42,7 +42,7 @@ init:
     mov ch, 0                   ; Cylinder 0
     mov dh, 0                   ; Head 0
     mov cl, 2                   ; Sector 2 (Sector 1 is boot sector)
-    mov bp, 180                 ; Read 180 sectors (90 KB kernel capacity)
+    mov bp, 240                 ; Read 240 sectors (120 KB kernel capacity)
 
 .read_sector_loop:
     mov ah, 0x02                ; BIOS Read Sectors
@@ -195,8 +195,8 @@ gdt_descriptor:
 
 boot_drive: db 0
 
-msg_boot: db 'Eran OS Bootloader v0.3.0', ENDL, 0
-msg_ok:   db '[BOOT] 180 sectors (90 KB) loaded to 0x10000. Entering PM...', ENDL, 0
+msg_boot: db 'Eran OS Bootloader v0.4.0', ENDL, 0
+msg_ok:   db '[BOOT] 240 sectors (120 KB) loaded to 0x10000. Entering PM...', ENDL, 0
 msg_err:  db '[FATAL] Disk read error!', ENDL, 0
 
 ; ------------------------------------------------------------------------------

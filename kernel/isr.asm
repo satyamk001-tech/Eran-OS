@@ -152,3 +152,29 @@ irq_common_stub:
     popa
     add esp, 8
     iret
+
+; ------------------------------------------------------------------------------
+; Transition into User Space (Ring 3) via IRET
+; void enter_user_mode(uint32_t entry_point, uint32_t user_stack);
+; ------------------------------------------------------------------------------
+global enter_user_mode
+enter_user_mode:
+    mov edx, [esp + 4]    ; entry_point EIP
+    mov ecx, [esp + 8]    ; user_stack ESP
+
+    mov ax, 0x23          ; User Data Selector (Ring 3: Index 4, RPL=3)
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+
+    push 0x23             ; SS
+    push ecx              ; ESP
+    pushfd                ; EFLAGS
+    pop eax
+    or eax, 0x200         ; Enable Interrupts (IF=1)
+    push eax              ; EFLAGS
+    push 0x1B             ; CS (User Code Selector: Index 3, RPL=3)
+    push edx              ; EIP
+    iretd
+

@@ -22,4 +22,10 @@ vfs_node_t *vfs_find_node(const char *path);
 void vfs_list_dir(const char *path);
 int vfs_read_file(const char *path, char *buf, size_t max_len);
 
+// Phase 22: Persistent Storage & Writable Filesystem API
+int vfs_create_file(const char *path, const char *initial_data);
+int vfs_write_file(const char *path, const char *data, size_t len);
+int vfs_create_dir(const char *path);
+int vfs_delete_file(const char *path);
+
 #endif /* ERAN_FS_VFS_H */

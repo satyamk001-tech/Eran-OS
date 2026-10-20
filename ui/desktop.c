@@ -2,6 +2,7 @@
 #include "../drivers/gfx.h"
 #include "../drivers/vga.h"
 #include "../drivers/keyboard.h"
+#include "../drivers/mouse.h"
 #include "../drivers/timer.h"
 #include "../drivers/audio.h"
 #include "../mm/pmm.h"
@@ -93,7 +94,13 @@ void desktop_render(void) {
 
     gfx_draw_string(42, CANVAS_HEIGHT - 1, "Keys: [TAB] Win [B] Sound [Q] Exit", VGA_COLOR_DARK_GREY, VGA_COLOR_LIGHT_GREY);
 
-    // 5. Blit Backbuffer to VGA text buffer
+    // 5. Draw Mouse Cursor Sprite
+    const mouse_state_t *ms = mouse_get_state();
+    if (ms) {
+        gfx_put_char(ms->x, ms->y, 0x18, VGA_COLOR_WHITE, VGA_COLOR_RED);
+    }
+
+    // 6. Blit Backbuffer to VGA text buffer
     gfx_flip_to_screen();
 }
 
@@ -104,6 +111,15 @@ void desktop_interactive(void) {
     // Event loop for desktop UI
     int running = 1;
     while (running) {
+        if (mouse_has_moved()) {
+            const mouse_state_t *ms = mouse_get_state();
+            if (ms && (ms->buttons & MOUSE_BTN_LEFT)) {
+                if (ms->x < 40) active_win_idx = 0;
+                else active_win_idx = 1;
+            }
+            desktop_render();
+        }
+
         if (keyboard_has_char()) {
             char c = keyboard_getchar();
             if (c == 'q' || c == 'Q' || c == 27) { // 27 = ESC

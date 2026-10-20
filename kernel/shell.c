@@ -1,7 +1,9 @@
 #include "shell.h"
 #include "syscall.h"
+#include "elf.h"
 #include "../drivers/vga.h"
 #include "../drivers/keyboard.h"
+#include "../drivers/mouse.h"
 #include "../drivers/timer.h"
 #include "../drivers/serial.h"
 #include "../drivers/ata.h"
@@ -15,10 +17,13 @@
 #include "../hal/io.h"
 #include "../hal/acpi.h"
 #include "../hal/cpu.h"
+#include "../hal/longmode.h"
 #include "../fs/vfs.h"
 #include "../net/net.h"
+#include "../net/tcp.h"
 #include "../ui/desktop.h"
 #include "../user/ai_engine.h"
+#include "../user/micro_ai.h"
 #include "../process/process.h"
 
 #define CMD_BUFFER_SIZE 128
@@ -41,6 +46,12 @@ static int strncmp(const char *s1, const char *s2, size_t n) {
     return *(const unsigned char *)s1 - *(const unsigned char *)s2;
 }
 
+static size_t strlen(const char *s) {
+    size_t len = 0;
+    while (s[len]) len++;
+    return len;
+}
+
 static void cmd_help(void) {
     kprintf("===================================================================\n");
     kprintf("                       ERAN OS SHELL HELP                          \n");
@@ -50,23 +61,35 @@ static void cmd_help(void) {
     kprintf(" clear             - Clear the VGA text console\n");
     kprintf(" cpuinfo           - Display processor state and segment selectors\n");
     kprintf(" cpufeatures       - Enumerate CPUID instruction sets & 64-bit Long Mode\n");
+    kprintf(" longmode          - 64-bit Long Mode transition & 4-level paging probe\n");
     kprintf(" meminfo           - Display physical page frames and heap statistics\n");
     kprintf(" vmm               - Virtual Memory Manager & two-level paging status\n");
     kprintf(" uptime            - Show system uptime from PIT hardware timer\n");
     kprintf(" processes         - Enumerate active tasks and scheduler state\n");
     kprintf(" atainfo           - Display Parallel ATA / IDE storage status\n");
     kprintf(" usb               - USB Host Controller & enumerated devices\n");
+    kprintf(" mouse             - PS/2 auxiliary mouse status, coordinates, & buttons\n");
     kprintf(" devices           - Enumerate all detected PCI hardware controllers\n");
     kprintf(" ifconfig          - Network interface configuration (IP/MAC/packets)\n");
     kprintf(" ping <ip>         - Send ICMP Echo Request to IP address\n");
+    kprintf(" tcp               - Display TCP stream socket allocation table\n");
+    kprintf(" telnet <ip> <port>- Connect to remote endpoint via TCP stream\n");
+    kprintf(" curl <ip>         - Send HTTP request to server over TCP port 80\n");
     kprintf(" beep              - Play 880 Hz system tone via PC Speaker\n");
     kprintf(" chime             - Play synthesized 4-note melodic chime\n");
-    kprintf(" desktop           - Launch 2D graphical desktop environment\n");
+    kprintf(" desktop           - Launch 2D graphical desktop environment & mouse\n");
     kprintf(" acpi              - Query ACPI power management & RSDP tables\n");
     kprintf(" battery           - Display laptop battery charge and AC line status\n");
     kprintf(" ai <prompt>       - Run offline natural language AI assistant\n");
+    kprintf(" aineural <prompt> - Run embedded neural micro-inference diagnostics\n");
+    kprintf(" run <file.elf>    - Execute standalone ELF32 user binary in Ring 3\n");
+    kprintf(" elfinfo <file.elf>- Inspect ELF32 header and program segments\n");
     kprintf(" ls [path]         - List files and directories from the VFS\n");
     kprintf(" cat <path>        - Display text file contents\n");
+    kprintf(" touch <path>      - Create an empty file in the VFS\n");
+    kprintf(" write <file> <txt>- Write text data into a file\n");
+    kprintf(" mkdir <path>      - Create a new directory in the VFS\n");
+    kprintf(" rm <path>         - Delete a file from the VFS\n");
     kprintf(" echo <text>       - Print text to screen and serial log\n");
     kprintf(" syscall           - Test INT 0x80 system call dispatch\n");
     kprintf(" reboot            - Perform warm hardware reboot via ACPI / 8042\n");
@@ -76,14 +99,11 @@ static void cmd_help(void) {
 }
 
 static void cmd_version(void) {
-    kprintf("Eran OS Kernel v0.3.0 (i386-pc-freestanding)\n");
+    kprintf("Eran OS Kernel v0.4.0 (i386-pc-freestanding)\n");
     kprintf("Architect: Eran OS Principal Systems Team\n");
     kprintf("Target   : x86 32-bit Protected Mode (Ring 0 / Ring 3 Isolated)\n");
-    kprintf("Features : GDT+TSS, IDT (32 Exceptions + 16 IRQs), PIC 8259, PIT 100Hz,\n");
-    kprintf("           PS/2 Keyboard, 16550 Serial UART, Direct VGA MMIO, Bitmap PMM,\n");
-    kprintf("           Two-Level Paging (VMM), Kernel Heap, ATA PIO, RamFS VFS,\n");
-    kprintf("           Intel e1000 NIC, IPv4/ARP/ICMP, PC Speaker Audio, Desktop UI,\n");
-    kprintf("           ACPI Power/Battery, USB Discovery, Native Offline AI Engine.\n");
+    kprintf("Advanced : ELF32 Executable Loader, Writable VFS, PS/2 Mouse Driver,\n");
+    kprintf("           TCP Streams, 64-bit Long Mode Paging, Embedded Neural AI.\n");
 }
 
 static void cmd_cpuinfo(void) {
@@ -147,6 +167,9 @@ void shell_execute(const char *cmdline) {
         cmd_cpuinfo();
     } else if (strcmp(cmdline, "cpufeatures") == 0 || strcmp(cmdline, "cpuid") == 0) {
         cpu_print_features();
+    } else if (strcmp(cmdline, "longmode") == 0 || strcmp(cmdline, "x86_64") == 0) {
+        longmode_print_status();
+        longmode_test_transition();
     } else if (strcmp(cmdline, "meminfo") == 0) {
         cmd_meminfo();
     } else if (strcmp(cmdline, "vmm") == 0) {
@@ -159,6 +182,8 @@ void shell_execute(const char *cmdline) {
         ata_print_status();
     } else if (strcmp(cmdline, "usb") == 0) {
         usb_print_status();
+    } else if (strcmp(cmdline, "mouse") == 0) {
+        mouse_print_status();
     } else if (strcmp(cmdline, "devices") == 0) {
         pci_print_devices();
     } else if (strcmp(cmdline, "ifconfig") == 0) {
@@ -168,6 +193,21 @@ void shell_execute(const char *cmdline) {
         while (*arg == ' ') arg++;
         if (*arg == '\0') arg = "192.168.1.1";
         net_ping(arg);
+    } else if (strcmp(cmdline, "tcp") == 0) {
+        tcp_print_status();
+    } else if (strncmp(cmdline, "telnet", 6) == 0) {
+        const char *arg = cmdline + 6;
+        while (*arg == ' ') arg++;
+        if (*arg == '\0') {
+            tcp_cmd_telnet("192.168.1.1", 23);
+        } else {
+            tcp_cmd_telnet(arg, 23);
+        }
+    } else if (strncmp(cmdline, "curl", 4) == 0) {
+        const char *arg = cmdline + 4;
+        while (*arg == ' ') arg++;
+        if (*arg == '\0') arg = "192.168.1.1";
+        tcp_cmd_curl(arg);
     } else if (strcmp(cmdline, "beep") == 0) {
         audio_beep();
     } else if (strcmp(cmdline, "chime") == 0) {
@@ -178,10 +218,36 @@ void shell_execute(const char *cmdline) {
         acpi_print_status();
     } else if (strcmp(cmdline, "battery") == 0) {
         acpi_print_battery();
+    } else if (strncmp(cmdline, "aineural", 8) == 0) {
+        const char *arg = cmdline + 8;
+        while (*arg == ' ') arg++;
+        if (*arg == '\0') arg = "what is the system uptime";
+        micro_ai_print_inspection(arg);
+        micro_ai_process_query(arg);
     } else if (strncmp(cmdline, "ai", 2) == 0 && (cmdline[2] == ' ' || cmdline[2] == '\0')) {
         const char *arg = cmdline + 2;
         while (*arg == ' ') arg++;
         ai_process_query(arg);
+    } else if (strncmp(cmdline, "run", 3) == 0) {
+        const char *arg = cmdline + 3;
+        while (*arg == ' ') arg++;
+        if (*arg == '\0') arg = "/bin/hello.elf";
+        vfs_node_t *node = vfs_find_node(arg);
+        if (node && node->data) {
+            elf_load_and_run(node->data, node->size);
+        } else {
+            kprintf("run: Executable not found: %s\n", arg);
+        }
+    } else if (strncmp(cmdline, "elfinfo", 7) == 0) {
+        const char *arg = cmdline + 7;
+        while (*arg == ' ') arg++;
+        if (*arg == '\0') arg = "/bin/hello.elf";
+        vfs_node_t *node = vfs_find_node(arg);
+        if (node && node->data) {
+            elf_print_info(node->data, node->size);
+        } else {
+            kprintf("elfinfo: File not found: %s\n", arg);
+        }
     } else if (strcmp(cmdline, "syscall") == 0) {
         int32_t pid = sys_getpid();
         int32_t sec = sys_uptime();
@@ -197,6 +263,58 @@ void shell_execute(const char *cmdline) {
         acpi_poweroff();
     } else if (strcmp(cmdline, "panic") == 0) {
         cmd_panic();
+    } else if (strncmp(cmdline, "touch", 5) == 0) {
+        const char *arg = cmdline + 5;
+        while (*arg == ' ') arg++;
+        if (*arg == '\0') {
+            kprintf("Usage: touch <filename>\n");
+        } else {
+            if (vfs_create_file(arg, "") == 0) {
+                kprintf("touch: Created file %s\n", arg);
+            } else {
+                kprintf("touch: Failed to create file %s\n", arg);
+            }
+        }
+    } else if (strncmp(cmdline, "mkdir", 5) == 0) {
+        const char *arg = cmdline + 5;
+        while (*arg == ' ') arg++;
+        if (*arg == '\0') {
+            kprintf("Usage: mkdir <directory>\n");
+        } else {
+            if (vfs_create_dir(arg) == 0) {
+                kprintf("mkdir: Created directory %s\n", arg);
+            } else {
+                kprintf("mkdir: Failed to create directory %s\n", arg);
+            }
+        }
+    } else if (strncmp(cmdline, "rm", 2) == 0 && (cmdline[2] == ' ' || cmdline[2] == '\0')) {
+        const char *arg = cmdline + 2;
+        while (*arg == ' ') arg++;
+        if (*arg == '\0') {
+            kprintf("Usage: rm <filename>\n");
+        } else {
+            if (vfs_delete_file(arg) == 0) {
+                kprintf("rm: Deleted %s\n", arg);
+            } else {
+                kprintf("rm: File not found: %s\n", arg);
+            }
+        }
+    } else if (strncmp(cmdline, "write", 5) == 0) {
+        const char *arg = cmdline + 5;
+        while (*arg == ' ') arg++;
+        char fname[32];
+        int fidx = 0;
+        while (*arg && *arg != ' ' && fidx < 31) {
+            fname[fidx++] = *arg++;
+        }
+        fname[fidx] = '\0';
+        while (*arg == ' ') arg++;
+        if (fname[0] == '\0' || *arg == '\0') {
+            kprintf("Usage: write <filename> <content>\n");
+        } else {
+            int written = vfs_write_file(fname, arg, strlen(arg));
+            kprintf("write: Written %d bytes to %s\n", written, fname);
+        }
     } else if (strncmp(cmdline, "ls", 2) == 0) {
         const char *arg = cmdline + 2;
         while (*arg == ' ') arg++;

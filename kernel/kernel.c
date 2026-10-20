@@ -8,10 +8,12 @@
 #include "pic.h"
 #include "shell.h"
 #include "syscall.h"
+#include "elf.h"
 #include "../drivers/vga.h"
 #include "../drivers/serial.h"
 #include "../drivers/timer.h"
 #include "../drivers/keyboard.h"
+#include "../drivers/mouse.h"
 #include "../drivers/ata.h"
 #include "../drivers/usb.h"
 #include "../drivers/e1000.h"
@@ -23,10 +25,13 @@
 #include "../hal/pci.h"
 #include "../hal/acpi.h"
 #include "../hal/cpu.h"
+#include "../hal/longmode.h"
 #include "../fs/vfs.h"
 #include "../net/net.h"
+#include "../net/tcp.h"
 #include "../ui/desktop.h"
 #include "../user/ai_engine.h"
+#include "../user/micro_ai.h"
 #include "../process/process.h"
 
 static void task_background_monitor(void) {
@@ -43,7 +48,7 @@ void kmain(void) {
     // 2. Display System Boot Banner
     vga_set_color(VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
     kprintf("===================================================================\n");
-    kprintf("                    ERAN OS - KERNEL v0.3.0                        \n");
+    kprintf("                    ERAN OS - KERNEL v0.4.0                        \n");
     kprintf("===================================================================\n");
     vga_set_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
     kprintf("[KERNEL] Target: x86 32-bit Protected Mode (Base: 0x10000)\n");
@@ -88,7 +93,7 @@ void kmain(void) {
     // 9. Initialize System Call Gate (INT 0x80)
     kprintf("[KERNEL] Initializing System Call Interface (INT 0x80)...\n");
     syscall_init();
-    kprintf("[KERNEL] System call dispatcher active (SYS_YIELD, SYS_EXIT, SYS_WRITE...).\n");
+    kprintf("[KERNEL] System call dispatcher active (SYS_YIELD, SYS_EXIT, SYS_WRITE...). \n");
 
     // 10. Initialize Process Management & Multitasking Scheduler
     kprintf("[KERNEL] Initializing Process Scheduler...\n");
@@ -113,7 +118,7 @@ void kmain(void) {
     // 13. Initialize Virtual Filesystem (VFS) and System Mounts
     kprintf("[KERNEL] Mounting Virtual Filesystem (RamFS)...\n");
     vfs_init();
-    kprintf("[KERNEL] VFS root '/' mounted with initial system files.\n");
+    kprintf("[KERNEL] VFS root '/' mounted with initial system files & /bin/hello.elf.\n");
 
     // 14. Initialize USB Host Controller and Root Hub
     kprintf("[KERNEL] Initializing USB Subsystem...\n");
@@ -125,37 +130,53 @@ void kmain(void) {
     net_init();
     kprintf("[KERNEL] Network initialized (eth0: 192.168.1.50/24).\n");
 
-    // 16. Initialize Audio Subsystem & PC Speaker
+    // 16. Initialize TCP Stream Protocol Manager
+    kprintf("[KERNEL] Initializing TCP Stream Connection Manager...\n");
+    tcp_init();
+    kprintf("[KERNEL] TCP stack initialized (RFC 793, 4 sockets available).\n");
+
+    // 17. Initialize Audio Subsystem & PC Speaker
     kprintf("[KERNEL] Initializing Audio Subsystem (PIT Ch 2)...\n");
     audio_init();
     kprintf("[KERNEL] Audio tone generator online.\n");
 
-    // 17. Initialize ACPI Power Management & Battery Telemetry
+    // 18. Initialize PS/2 Mouse Driver
+    kprintf("[KERNEL] Initializing 8042 PS/2 Auxiliary Mouse (IRQ 12)...\n");
+    mouse_init();
+    kprintf("[KERNEL] PS/2 mouse driver online (streaming mode enabled).\n");
+
+    // 19. Initialize ACPI Power Management & Battery Telemetry
     kprintf("[KERNEL] Initializing ACPI Power Management...\n");
     acpi_init();
     kprintf("[KERNEL] ACPI tables parsed & power management ready.\n");
 
-    // 18. Initialize CPU Architecture & Long Mode Detector
+    // 20. Initialize CPU Architecture & Long Mode Detector
     kprintf("[KERNEL] Probing CPUID Architecture Features...\n");
     cpu_init();
     kprintf("[KERNEL] CPUID probed (%s).\n", cpu_get_info()->brand);
 
-    // 19. Initialize Native Offline AI Engine
-    kprintf("[KERNEL] Initializing Native Offline AI Assistant Core...\n");
-    ai_engine_init();
-    kprintf("[KERNEL] Ring 3 unprivileged AI Engine active.\n");
+    // 21. Initialize 64-bit Long Mode Transition Paging
+    kprintf("[KERNEL] Preparing 64-bit Long Mode (x86_64) Transition Tables...\n");
+    longmode_init();
+    kprintf("[KERNEL] Long Mode 4-level paging framework primed (PML4 initialized).\n");
 
-    // 20. Startup Complete - Launch Interactive Shell
+    // 22. Initialize Native Offline AI Engine & Embedded Micro-Neural Model
+    kprintf("[KERNEL] Initializing Native Offline AI Assistant & Neural Model...\n");
+    ai_engine_init();
+    micro_ai_init();
+    kprintf("[KERNEL] Ring 3 unprivileged AI Engine & Micro-Neural Model active.\n");
+
+    // 23. Startup Complete - Launch Interactive Shell
     vga_set_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK);
     kprintf("\n[STATUS] Eran OS kernel initialization completed successfully!\n");
     vga_set_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK);
-    kprintf("Type 'help' for commands, 'desktop' for GUI, 'ai <prompt>' for assistant.\n\n");
+    kprintf("Type 'help' for commands, 'desktop' for GUI, 'run' for ELF binaries.\n\n");
 
     shell_init();
 
-    // 21. Kernel Interactive Event Loop
+    // 24. Kernel Interactive Event Loop
     for (;;) {
         shell_run_prompt();
-        __asm__ volatile ("hlt"); // Sleep until next hardware interrupt (timer, keyboard)
+        __asm__ volatile ("hlt"); // Sleep until next hardware interrupt (timer, keyboard, mouse)
     }
 }

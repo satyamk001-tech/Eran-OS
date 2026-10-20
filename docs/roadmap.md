@@ -1,12 +1,12 @@
 # Eran OS Master Implementation Roadmap
 
-## Subsystem Roadmap & Verified Status
+## Subsystem Roadmap & Verified Status (Phases 0 to 26)
 
 | Phase | Subsystem / Focus | Status | Implementation Details |
 |:-----:|:-------------------|:------:|:-----------------------|
-| **0** | Repository Audit & Baseline | **COMPLETED** | Toolchain audited, git remote initialized, baseline preserved. |
+| **0** | Repository Audit & Baseline | **COMPLETED** | Toolchain audited, git remote configured, baseline preserved. |
 | **1** | Working Bootloader | **COMPLETED** | Real mode normalization, stack setup, CLD, serial logging. |
-| **2** | Stage 2 & Protected Mode | **COMPLETED** | INT 13h multi-track loading (180 sectors / 90 KB), Fast A20, 32-bit GDT, CR0.PE transition. |
+| **2** | Stage 2 & Protected Mode | **COMPLETED** | INT 13h multi-track loading (240 sectors / 120 KB), Fast A20, 32-bit GDT, CR0.PE transition. |
 | **3** | Freestanding C Kernel | **COMPLETED** | Linker script at 0x10000, 32-bit entry stub, freestanding C `kmain`. |
 | **4** | CPU Exceptions & Interrupts | **COMPLETED** | 256-entry IDT, 32 CPU exception panic reports, 8259 PIC remapped, PIT 100Hz timer. |
 | **5** | Memory Management & Paging | **COMPLETED** | Bitmap Frame Allocator (PMM, 32 MB), Two-Level Paging (VMM, CR0.PG=1, 16 MB mapped), Heap (`kmalloc`/`kfree`). |
@@ -25,3 +25,9 @@
 | **18** | Native OS-Service Port | **COMPLETED** | Native C offline AI engine executing inside kernel via unprivileged `INT 0x80` syscalls (`ai <prompt>`). |
 | **19** | Security & Hardening | **COMPLETED** | Path traversal sandbox validation (`../` rejection), destructive action confirmation, Ring 0/3 isolation. |
 | **20** | Hardware & Long Mode Probe | **COMPLETED** | CPUID feature detector, instruction set enumerator (FPU, TSC, APIC, SSE-AVX), 64-bit Long Mode capability test. |
+| **21** | ELF32 Executable Binary Loader | **COMPLETED** | Dynamic ELF32 parser (`elf.c`), Program Header loader (`PT_LOAD`), Ring 3 `enter_user_mode`, sample `/bin/hello.elf` (`run`). |
+| **22** | Persistent & Writable Filesystem | **COMPLETED** | VFS file creation (`touch`), directory creation (`mkdir`), write operations (`write`), deletion (`rm`), and ATA PIO block syncing. |
+| **23** | PS/2 Mouse Driver & GUI Cursor | **COMPLETED** | 8042 PS/2 auxiliary mouse on IRQ 12, 3-byte relative motion stream decoder, and desktop graphical cursor sprite (`mouse`). |
+| **24** | TCP Stream Protocol & BSD Sockets | **COMPLETED** | RFC 793 TCP state machine (`CLOSED`->`SYN_SENT`->`ESTABLISHED`), sequence/ACK tracking, socket pool, `telnet`, and HTTP `curl`. |
+| **25** | 64-bit Long Mode Transition | **COMPLETED** | 4-Level Paging framework (PML4, PDPT, PD, PT), PAE activation ready, EFER MSR LME prober (`longmode` / `x86_64`). |
+| **26** | Embedded Micro-Neural Model | **COMPLETED** | Dense(32)->Dense(16, ReLU)->Dense(8, Softmax) quantized neural inference engine with multi-turn conversation memory (`aineural`). |

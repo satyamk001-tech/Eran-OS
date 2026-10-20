@@ -38,12 +38,14 @@ KERNEL_OBJS := $(BUILD_DIR)/entry.o \
                $(BUILD_DIR)/idt.o \
                $(BUILD_DIR)/pic.o \
                $(BUILD_DIR)/syscall.o \
+               $(BUILD_DIR)/elf.o \
                $(BUILD_DIR)/process.o \
                $(BUILD_DIR)/shell.o \
                $(BUILD_DIR)/vga.o \
                $(BUILD_DIR)/serial.o \
                $(BUILD_DIR)/timer.o \
                $(BUILD_DIR)/keyboard.o \
+               $(BUILD_DIR)/mouse.o \
                $(BUILD_DIR)/ata.o \
                $(BUILD_DIR)/pmm.o \
                $(BUILD_DIR)/heap.o \
@@ -52,12 +54,15 @@ KERNEL_OBJS := $(BUILD_DIR)/entry.o \
                $(BUILD_DIR)/usb.o \
                $(BUILD_DIR)/e1000.o \
                $(BUILD_DIR)/net.o \
+               $(BUILD_DIR)/tcp.o \
                $(BUILD_DIR)/audio.o \
                $(BUILD_DIR)/gfx.o \
                $(BUILD_DIR)/desktop.o \
                $(BUILD_DIR)/acpi.o \
                $(BUILD_DIR)/cpu.o \
+               $(BUILD_DIR)/longmode.o \
                $(BUILD_DIR)/ai_engine.o \
+               $(BUILD_DIR)/micro_ai.o \
                $(BUILD_DIR)/vfs.o
 
 .PHONY: all dirs clean run run-cli debug test test-ai run-ai help
@@ -107,6 +112,10 @@ $(BUILD_DIR)/syscall.o: $(KERNEL_DIR)/syscall.c | dirs
 	@echo "  [CC]   $< -> $@"
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/elf.o: $(KERNEL_DIR)/elf.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/process.o: $(PROC_DIR)/process.c | dirs
 	@echo "  [CC]   $< -> $@"
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -128,6 +137,10 @@ $(BUILD_DIR)/timer.o: $(DRV_DIR)/timer.c | dirs
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/keyboard.o: $(DRV_DIR)/keyboard.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/mouse.o: $(DRV_DIR)/mouse.c | dirs
 	@echo "  [CC]   $< -> $@"
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -163,6 +176,10 @@ $(BUILD_DIR)/net.o: $(NET_DIR)/net.c | dirs
 	@echo "  [CC]   $< -> $@"
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/tcp.o: $(NET_DIR)/tcp.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/audio.o: $(DRV_DIR)/audio.c | dirs
 	@echo "  [CC]   $< -> $@"
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -183,7 +200,15 @@ $(BUILD_DIR)/cpu.o: $(HAL_DIR)/cpu.c | dirs
 	@echo "  [CC]   $< -> $@"
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/longmode.o: $(HAL_DIR)/longmode.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/ai_engine.o: $(USER_DIR)/ai_engine.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/micro_ai.o: $(USER_DIR)/micro_ai.c | dirs
 	@echo "  [CC]   $< -> $@"
 	$(CC) $(CFLAGS) -c $< -o $@
 
