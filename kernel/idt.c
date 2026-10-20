@@ -31,6 +31,7 @@ extern void isr16(void); extern void isr17(void); extern void isr18(void); exter
 extern void isr20(void); extern void isr21(void); extern void isr22(void); extern void isr23(void);
 extern void isr24(void); extern void isr25(void); extern void isr26(void); extern void isr27(void);
 extern void isr28(void); extern void isr29(void); extern void isr30(void); extern void isr31(void);
+extern void isr128(void); // System Call Software Interrupt (0x80)
 
 // External assembly IRQ declarations
 extern void irq0(void);  extern void irq1(void);  extern void irq2(void);  extern void irq3(void);
@@ -181,6 +182,10 @@ void idt_init(void) {
     idt_set_gate(45, (uint32_t)irq13, 0x08, 0x8E);
     idt_set_gate(46, (uint32_t)irq14, 0x08, 0x8E);
     idt_set_gate(47, (uint32_t)irq15, 0x08, 0x8E);
+
+    // Install System Call Software Interrupt Gate 0x80 (Vector 128)
+    // Flags 0xEE: Present=1, DPL=3 (Ring 3 accessible), 32-bit Interrupt Gate
+    idt_set_gate(128, (uint32_t)isr128, 0x08, 0xEE);
 
     // Load IDT into CPU
     __asm__ volatile ("lidt (%0)" : : "r"(&idt_ptr));

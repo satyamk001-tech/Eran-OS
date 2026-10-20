@@ -3,15 +3,18 @@
 Eran OS - Comprehensive Automated Kernel Verification Suite
 Validates:
 1. Bootloader MBR binary geometry & signature
-2. Protected mode transition & GDT loading
+2. Protected mode transition & GDT loading (User Selectors & TSS 0x28)
 3. Freestanding C kernel execution at 0x10000
 4. Interrupt Descriptor Table (IDT) & 8259 PIC remapping
 5. Hardware timer (PIT 100Hz) & PS/2 keyboard driver initialization
 6. Physical Memory Manager (PMM) frame bitmap allocator
 7. Dynamic Kernel Heap allocator (kmalloc/kfree)
-8. PCI bus peripheral device discovery
-9. Virtual Filesystem (VFS) & in-memory RamFS mount
-10. Interactive kernel shell prompt
+8. System Call Interface (INT 0x80 handler)
+9. Process management & multitasking scheduler
+10. PCI bus peripheral device discovery
+11. Parallel ATA / IDE storage controller initialization
+12. Virtual Filesystem (VFS) & in-memory RamFS mount
+13. Interactive kernel shell prompt
 """
 
 import os
@@ -27,17 +30,20 @@ IMG_FILE = os.path.join(BUILD_DIR, "eran_os.img")
 
 EXPECTED_OUTPUTS = [
     "Eran OS Bootloader v0.2.0",
-    "[BOOT] Track 0 Head 0 loaded.",
-    "[BOOT] Track 1 Head 0 loaded. Total 53 sectors.",
+    "[BOOT] Tracks 0-1 loaded. Total 71 sectors (36 KB).",
     "ERAN OS - KERNEL v0.2.0",
     "Target: x86 32-bit Protected Mode (Base: 0x10000)",
+    "GDT active (Kernel/User Ring 0/3 segments + TSS 0x28).",
     "IDT active (32 CPU Exceptions + 16 IRQs remapped).",
     "Initializing 8254 PIT Timer (100 Hz)...",
     "Initializing PS/2 Keyboard Driver (IRQ 1)...",
     "Hardware interrupts globally enabled.",
     "PMM initialized.",
     "Kernel Heap initialized",
+    "System call dispatcher active (SYS_YIELD, SYS_EXIT, SYS_WRITE...).",
+    "Multitasking scheduler active (PID 0: kernel_main, PID 1: bg_monitor).",
     "Scanning PCI Bus for hardware controllers...",
+    "Primary ATA controller initialized",
     "VFS root '/' mounted with initial system files.",
     "[STATUS] Eran OS kernel initialization completed successfully!",
     "eran>"

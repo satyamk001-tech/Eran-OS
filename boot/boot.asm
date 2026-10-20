@@ -66,7 +66,7 @@ init:
     mov si, msg_ok2
     call puts
 
-    ; Track 1, Head 0: Read 18 sectors (Sectors 1 to 18) -> Total 53 sectors = 27 KB
+    ; Track 1, Head 0: Read 18 sectors (Sectors 1 to 18)
     mov ax, 0x1000 + ((17 + 18) * 512 / 16)
     mov es, ax
     xor bx, bx
@@ -75,6 +75,19 @@ init:
     mov ch, 1                   ; Cylinder 1
     mov cl, 1                   ; Sector 1
     mov dh, 0                   ; Head 0
+    mov dl, [boot_drive]
+    int 0x13
+    jc disk_error
+
+    ; Track 1, Head 1: Read 18 sectors (Sectors 1 to 18) -> Total 71 sectors = 36 KB
+    mov ax, 0x1000 + ((17 + 18 + 18) * 512 / 16)
+    mov es, ax
+    xor bx, bx
+    mov ah, 0x02
+    mov al, 18
+    mov ch, 1                   ; Cylinder 1
+    mov cl, 1                   ; Sector 1
+    mov dh, 1                   ; Head 1
     mov dl, [boot_drive]
     int 0x13
     jc disk_error
@@ -206,7 +219,7 @@ boot_drive: db 0
 msg_boot: db 'Eran OS Bootloader v0.2.0', ENDL, 0
 msg_ok1:  db '[BOOT] Track 0 Head 0 loaded.', ENDL, 0
 msg_ok2:  db '[BOOT] Track 0 Head 1 loaded.', ENDL, 0
-msg_ok3:  db '[BOOT] Track 1 Head 0 loaded. Total 53 sectors.', ENDL, 0
+msg_ok3:  db '[BOOT] Tracks 0-1 loaded. Total 71 sectors (36 KB).', ENDL, 0
 msg_err:  db '[FATAL] Disk read error!', ENDL, 0
 
 ; ------------------------------------------------------------------------------

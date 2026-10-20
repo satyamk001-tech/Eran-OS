@@ -2,13 +2,14 @@
 #include "../kernel/idt.h"
 #include "../kernel/pic.h"
 #include "../hal/io.h"
+#include "../process/process.h"
 
 static volatile uint32_t timer_ticks = 0;
 static uint32_t timer_frequency = 100;
 
 static void timer_callback(registers_t *regs) {
-    (void)regs;
     timer_ticks++;
+    process_schedule(regs);
 }
 
 void timer_init(uint32_t frequency) {

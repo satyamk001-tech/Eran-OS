@@ -21,6 +21,8 @@ MM_DIR     := mm
 FS_DIR     := fs
 TOOLS_DIR  := tools
 
+PROC_DIR   := process
+
 BOOT_SRC   := $(BOOT_DIR)/boot.asm
 BOOT_BIN   := $(BUILD_DIR)/boot.bin
 KERNEL_BIN := $(BUILD_DIR)/kernel.bin
@@ -30,13 +32,17 @@ IMG_FILE   := $(BUILD_DIR)/eran_os.img
 KERNEL_OBJS := $(BUILD_DIR)/entry.o \
                $(BUILD_DIR)/isr.o \
                $(BUILD_DIR)/kernel.o \
+               $(BUILD_DIR)/gdt.o \
                $(BUILD_DIR)/idt.o \
                $(BUILD_DIR)/pic.o \
+               $(BUILD_DIR)/syscall.o \
+               $(BUILD_DIR)/process.o \
                $(BUILD_DIR)/shell.o \
                $(BUILD_DIR)/vga.o \
                $(BUILD_DIR)/serial.o \
                $(BUILD_DIR)/timer.o \
                $(BUILD_DIR)/keyboard.o \
+               $(BUILD_DIR)/ata.o \
                $(BUILD_DIR)/pmm.o \
                $(BUILD_DIR)/heap.o \
                $(BUILD_DIR)/pci.o \
@@ -73,11 +79,23 @@ $(BUILD_DIR)/kernel.o: $(KERNEL_DIR)/kernel.c | dirs
 	@echo "  [CC]   $< -> $@"
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/gdt.o: $(KERNEL_DIR)/gdt.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/idt.o: $(KERNEL_DIR)/idt.c | dirs
 	@echo "  [CC]   $< -> $@"
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/pic.o: $(KERNEL_DIR)/pic.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/syscall.o: $(KERNEL_DIR)/syscall.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/process.o: $(PROC_DIR)/process.c | dirs
 	@echo "  [CC]   $< -> $@"
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -98,6 +116,10 @@ $(BUILD_DIR)/timer.o: $(DRV_DIR)/timer.c | dirs
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/keyboard.o: $(DRV_DIR)/keyboard.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/ata.o: $(DRV_DIR)/ata.c | dirs
 	@echo "  [CC]   $< -> $@"
 	$(CC) $(CFLAGS) -c $< -o $@
 

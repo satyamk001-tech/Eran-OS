@@ -92,6 +92,9 @@ IRQ 13, 45              ; FPU Coprocessor
 IRQ 14, 46              ; Primary ATA Hard Disk
 IRQ 15, 47              ; Secondary ATA Hard Disk
 
+; Software Interrupt 0x80 (Vector 128) for System Calls
+ISR_NOERRCODE 128
+
 ; ------------------------------------------------------------------------------
 ; Common ISR handler stub
 ; ------------------------------------------------------------------------------

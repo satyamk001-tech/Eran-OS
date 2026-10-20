@@ -1,13 +1,16 @@
 #include "shell.h"
+#include "syscall.h"
 #include "../drivers/vga.h"
 #include "../drivers/keyboard.h"
 #include "../drivers/timer.h"
 #include "../drivers/serial.h"
+#include "../drivers/ata.h"
 #include "../mm/pmm.h"
 #include "../mm/heap.h"
 #include "../hal/pci.h"
 #include "../hal/io.h"
 #include "../fs/vfs.h"
+#include "../process/process.h"
 
 #define CMD_BUFFER_SIZE 128
 
@@ -39,6 +42,9 @@ static void cmd_help(void) {
     kprintf(" cpuinfo           - Display processor state and segment selectors\n");
     kprintf(" meminfo           - Display physical page frames and heap statistics\n");
     kprintf(" uptime            - Show system uptime from PIT hardware timer\n");
+    kprintf(" processes         - Enumerate active tasks and scheduler state\n");
+    kprintf(" atainfo           - Display Parallel ATA / IDE storage status\n");
+    kprintf(" syscall           - Test INT 0x80 system call dispatch\n");
     kprintf(" devices           - Enumerate all detected PCI hardware controllers\n");
     kprintf(" ls [path]         - List files and directories from the VFS\n");
     kprintf(" cat <path>        - Display text file contents\n");
@@ -145,6 +151,19 @@ void shell_execute(const char *cmdline) {
         cmd_meminfo();
     } else if (strcmp(cmdline, "uptime") == 0) {
         cmd_uptime();
+    } else if (strcmp(cmdline, "processes") == 0) {
+        process_list();
+    } else if (strcmp(cmdline, "atainfo") == 0) {
+        ata_print_status();
+    } else if (strcmp(cmdline, "syscall") == 0) {
+        int32_t pid = sys_getpid();
+        int32_t sec = sys_uptime();
+        int32_t devs = sys_devinfo();
+        kprintf("[SYSCALL TEST] INT 0x80 successfully executed:\n");
+        kprintf("  SYS_GETPID -> PID: %d\n", pid);
+        kprintf("  SYS_UPTIME -> Uptime: %d seconds\n", sec);
+        kprintf("  SYS_DEVINFO -> PCI Devices: %d\n", devs);
+        sys_write("[SYSCALL TEST] String printed via sys_write()!\n");
     } else if (strcmp(cmdline, "devices") == 0) {
         pci_print_devices();
     } else if (strcmp(cmdline, "reboot") == 0) {
@@ -189,15 +208,21 @@ void shell_run_prompt(void) {
     static char buffer[CMD_BUFFER_SIZE];
     static size_t buf_idx = 0;
 
-    while (keyboard_has_char()) {
-        char c = keyboard_getc();
+    char c = 0;
+    if (keyboard_has_char()) {
+        c = keyboard_getc();
+    } else if (serial_has_rx()) {
+        c = serial_getc();
+    }
+
+    if (c != 0) {
         if (c == '\n' || c == '\r') {
             vga_putc('\n');
             buffer[buf_idx] = '\0';
             shell_execute(buffer);
             buf_idx = 0;
             vga_puts_color("eran> ", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
-        } else if (c == '\b') {
+        } else if (c == '\b' || c == 127) {
             if (buf_idx > 0) {
                 buf_idx--;
                 vga_backspace();
