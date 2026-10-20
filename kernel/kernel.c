@@ -172,6 +172,44 @@ void kmain(void) {
     vga_set_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK);
     kprintf("Type 'help' for commands, 'desktop' for GUI, 'run' for ELF binaries.\n\n");
 
+    // Display prominent capital ERAN OS home screen on VGA display
+    vga_clear();
+    vga_set_color(VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    kprintf("================================================================================\n");
+    kprintf("              ______ _____            _   _    ____   _____ \n");
+    kprintf("             |  ____|  __ \\     /\\   | \\ | |  / __ \\ / ____|\n");
+    kprintf("             | |__  | |__) |   /  \\  |  \\| | | |  | | (___  \n");
+    kprintf("             |  __| |  _  /   / /\\ \\ | . ` | | |  | |\\___ \\ \n");
+    kprintf("             | |____| | \\ \\  / ____ \\| |\\  | | |__| |____) |\n");
+    kprintf("             |______|_|  \\_\\/_/    \\_\\_| \\_|  \\____/|_____/ \n");
+    kprintf("================================================================================\n");
+    vga_set_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    kprintf("                    E R A N   O S   -   v 0 . 4 . 0\n");
+    vga_set_color(VGA_COLOR_DARK_GREY, VGA_COLOR_BLACK);
+    kprintf("================================================================================\n");
+    vga_set_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK);
+    kprintf(" [OK] x86 32-bit Protected Mode | 32MB RAM | VFS Root '/' | e1000 NIC | ACPI\n");
+    vga_set_color(VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    kprintf(" [OK] Ring 3 User Mode Handover | INT 0x80 Syscall Gate   | Embedded Neural AI\n");
+    vga_set_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    kprintf("\n Quick Commands:\n");
+    vga_set_color(VGA_COLOR_LIGHT_BROWN, VGA_COLOR_BLACK);
+    kprintf("   desktop          ");
+    vga_set_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
+    kprintf("- Launch 2D graphical workstation desktop & mouse\n");
+    vga_set_color(VGA_COLOR_LIGHT_BROWN, VGA_COLOR_BLACK);
+    kprintf("   help             ");
+    vga_set_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
+    kprintf("- Display all 35+ system shell commands\n");
+    vga_set_color(VGA_COLOR_LIGHT_BROWN, VGA_COLOR_BLACK);
+    kprintf("   ai <prompt>      ");
+    vga_set_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
+    kprintf("- Query unprivileged native AI assistant\n");
+    vga_set_color(VGA_COLOR_LIGHT_BROWN, VGA_COLOR_BLACK);
+    kprintf("   run <file.elf>   ");
+    vga_set_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
+    kprintf("- Execute standalone user binary in Ring 3\n\n");
+
     shell_init();
 
     // 24. Kernel Interactive Event Loop
