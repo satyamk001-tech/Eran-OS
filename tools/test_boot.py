@@ -138,9 +138,12 @@ def test_kernel_execution():
     for cmd_str, _ in EXPECTED_SHELL_COMMANDS:
         proc.stdin.write(f"{cmd_str}\n")
         proc.stdin.flush()
-        time.sleep(0.2)
+        if "ping" in cmd_str:
+            time.sleep(1.0) # Ping sends 4 ICMP packets
+        else:
+            time.sleep(0.25)
 
-    time.sleep(0.5)
+    time.sleep(1.5)
     proc.terminate()
     try:
         proc.wait(timeout=1.0)
