@@ -58,6 +58,7 @@ KERNEL_OBJS := $(BUILD_DIR)/entry.o \
                $(BUILD_DIR)/audio.o \
                $(BUILD_DIR)/gfx.o \
                $(BUILD_DIR)/desktop.o \
+               $(BUILD_DIR)/browser.o \
                $(BUILD_DIR)/acpi.o \
                $(BUILD_DIR)/cpu.o \
                $(BUILD_DIR)/longmode.o \
@@ -192,6 +193,10 @@ $(BUILD_DIR)/desktop.o: $(UI_DIR)/desktop.c | dirs
 	@echo "  [CC]   $< -> $@"
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/browser.o: $(NET_DIR)/browser.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/acpi.o: $(HAL_DIR)/acpi.c | dirs
 	@echo "  [CC]   $< -> $@"
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -252,6 +257,10 @@ test-ai:
 test-ui: all
 	$(PYTHON) $(TOOLS_DIR)/test_desktop.py
 
+# Run Mini Linux & Web Browser Test Suite
+test-linux: all
+	$(PYTHON) $(TOOLS_DIR)/test_linux.py
+
 # Run Interactive Offline AI Shell
 run-ai:
 	$(PYTHON) ai-shell/src/eran_shell/main.py
@@ -270,5 +279,6 @@ help:
 	@echo "  test      - Run automated kernel regression test suite"
 	@echo "  test-ai   - Run offline AI Shell test suite"
 	@echo "  test-ui   - Run graphical desktop UI test suite"
+	@echo "  test-linux- Run Mini Linux & Web Browser test suite"
 	@echo "  run-ai    - Launch interactive offline AI productivity shell"
 	@echo "  clean     - Remove build artifacts"

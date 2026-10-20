@@ -41,7 +41,7 @@ IMG_FILE = os.path.join(BUILD_DIR, "eran_os.img")
 
 EXPECTED_BOOT_STRINGS = [
     "Eran OS Bootloader v0.4.0",
-    "[BOOT] 240 sectors (120 KB) loaded to 0x10000",
+    "[BOOT] 280 sectors (140 KB) loaded to 0x10000",
     "ERAN OS - KERNEL v0.4.0",
     "Target: x86 32-bit Protected Mode",
     "GDT active (Kernel/User Ring 0/3 segments + TSS 0x28).",

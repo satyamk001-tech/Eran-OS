@@ -4,35 +4,106 @@
 #include "../mm/heap.h"
 #include "../user/hello_elf_data.h"
 
+// ---------------------------------------------------------------------------
+// Directory Nodes
+// ---------------------------------------------------------------------------
 static vfs_node_t root_dir;
-static vfs_node_t system_dir;
-static vfs_node_t etc_dir;
 static vfs_node_t bin_dir;
+static vfs_node_t etc_dir;
+static vfs_node_t dev_dir;
+static vfs_node_t home_dir;
+static vfs_node_t user_dir;
+static vfs_node_t root_user_dir;
+static vfs_node_t var_dir;
+static vfs_node_t www_dir;
+static vfs_node_t tmp_dir;
+static vfs_node_t system_dir;
 
+// ---------------------------------------------------------------------------
+// File Nodes
+// ---------------------------------------------------------------------------
 static vfs_node_t file_readme;
 static vfs_node_t file_osinfo;
-static vfs_node_t file_hostname;
-static vfs_node_t file_devices;
-static vfs_node_t file_hello_elf;
 
+// /bin files
+static vfs_node_t file_hello_elf;
+static vfs_node_t file_bin_sh;
+static vfs_node_t file_bin_ls;
+static vfs_node_t file_bin_cat;
+static vfs_node_t file_bin_echo;
+static vfs_node_t file_bin_pwd;
+static vfs_node_t file_bin_uname;
+static vfs_node_t file_bin_whoami;
+static vfs_node_t file_bin_date;
+static vfs_node_t file_bin_clear;
+static vfs_node_t file_bin_browser;
+static vfs_node_t file_bin_curl;
+
+// /etc files
+static vfs_node_t file_hostname;
+static vfs_node_t file_issue;
+static vfs_node_t file_osrelease;
+static vfs_node_t file_passwd;
+static vfs_node_t file_motd;
+static vfs_node_t file_devices;
+
+// /dev files
+static vfs_node_t file_dev_tty0;
+static vfs_node_t file_dev_null;
+static vfs_node_t file_dev_zero;
+static vfs_node_t file_dev_eth0;
+static vfs_node_t file_dev_sda;
+
+// /home/user files
+static vfs_node_t file_home_welcome;
+
+// /root files
+static vfs_node_t file_root_bashrc;
+
+// /var/www files
+static vfs_node_t file_www_index;
+static vfs_node_t file_www_about;
+static vfs_node_t file_www_help;
+
+// ---------------------------------------------------------------------------
+// File Content Constants
+// ---------------------------------------------------------------------------
 static const char readme_content[] =
-    "Eran OS v0.4.0 - Operating System Foundation\n"
+    "Eran OS v0.4.0 - Mini Linux Operating System\n"
     "Built from bare metal x86 assembly to freestanding C.\n"
     "Featuring 32-bit Protected Mode, IDT exception handling,\n"
     "8259 PIC remapping, PIT 100Hz timer, PS/2 keyboard & mouse driver,\n"
     "Bitmap Physical Memory Manager, Dynamic Kernel Heap, Two-Level Paging,\n"
     "Intel e1000 Gigabit Network Stack, PC Speaker Audio Synthesizer,\n"
     "2D Graphical Desktop Compositor, ACPI Power Management, CPUID prober,\n"
-    "ELF32 Executable Binary Loader, and unprivileged Offline AI Engine.\n";
+    "ELF32 Executable Binary Loader, Mini Linux /bin utilities, and Web Browser.\n";
 
 static const char osinfo_content[] =
     "OS Name     : Eran OS\n"
-    "Version     : 0.4.0 (Advanced Kernel Milestones Active)\n"
+    "Version     : 0.4.0 (Mini Linux Edition Active)\n"
     "Architecture: x86 32-bit (IA-32 Protected Mode & Long Mode Probe)\n"
     "Boot Method : Legacy BIOS MBR -> Protected Mode Handover\n"
     "Kernel Base : 0x00010000 Physical\n";
 
-static const char hostname_content[] = "eranos-workstation\n";
+static const char hostname_content[] = "eranos\n";
+
+static const char issue_content[] = "Eran OS Mini Linux 0.4.0 \\n \\l\n\n";
+
+static const char osrelease_content[] =
+    "NAME=\"Eran OS\"\n"
+    "VERSION=\"0.4.0\"\n"
+    "ID=eranos\n"
+    "ID_LIKE=linux\n"
+    "PRETTY_NAME=\"Eran OS Mini Linux 0.4.0 (x86_32)\"\n"
+    "HOME_URL=\"https://github.com/satyamk001-tech/Eran-OS\"\n";
+
+static const char passwd_content[] =
+    "root:x:0:0:root:/root:/bin/sh\n"
+    "user:x:1000:1000:user:/home/user:/bin/sh\n";
+
+static const char motd_content[] =
+    "Welcome to Eran OS Mini Linux workstation.\n"
+    "Type 'help' for commands, 'browser' for web, 'desktop' for GUI.\n";
 
 static const char devices_content[] =
     "Discovered Hardware Subsystems:\n"
@@ -48,6 +119,77 @@ static const char devices_content[] =
     "- ACPI Power Management & Battery Telemetry\n"
     "- CPUID Extended Feature & Long Mode Detector\n";
 
+static const char script_sh[]      = "#!/bin/sh\n# Eran OS Command Interpreter\n";
+static const char script_ls[]      = "#!/bin/sh\n# List directory contents\n";
+static const char script_cat[]     = "#!/bin/sh\n# Print file contents\n";
+static const char script_echo[]    = "#!/bin/sh\n# Print arguments\n";
+static const char script_pwd[]     = "#!/bin/sh\n# Print working directory\n";
+static const char script_uname[]   = "#!/bin/sh\n# Print system architecture\n";
+static const char script_whoami[]  = "#!/bin/sh\n# Print current user\n";
+static const char script_date[]    = "#!/bin/sh\n# Print date and uptime\n";
+static const char script_clear[]   = "#!/bin/sh\n# Clear console screen\n";
+static const char script_browser[] = "#!/bin/sh\n# Eran OS Mini Linux Web Browser\n";
+static const char script_curl[]    = "#!/bin/sh\n# HTTP network fetcher\n";
+
+static const char dev_tty0_content[] = "Character Device: Standard VGA 80x25 Console\n";
+static const char dev_null_content[] = "Character Device: Null sink\n";
+static const char dev_zero_content[] = "Character Device: Zero stream\n";
+static const char dev_eth0_content[] = "Network Device: Intel 82540EM (e1000) Gigabit NIC (192.168.1.50)\n";
+static const char dev_sda_content[]  = "Block Device: Primary Parallel ATA IDE Drive (0x1F0 LBA28)\n";
+
+static const char home_welcome_content[] =
+    "Welcome to your Eran OS user home directory!\n"
+    "Type 'browser' to surf the web or 'desktop' for the GUI workstation.\n";
+
+static const char root_bashrc_content[] =
+    "# Eran OS environment configuration\n"
+    "export PATH=/bin:/usr/bin\n"
+    "export USER=root\n"
+    "export HOME=/root\n";
+
+static const char www_index_content[] =
+    "<html><head><title>Eran OS Home Portal</title></head><body>"
+    "<h1>Welcome to Eran OS Web Portal</h1>"
+    "<p>Eran OS is a lightweight bare-metal operating system engineered from scratch.</p>"
+    "<hr><h2>System Highlights</h2><ul>"
+    "<li>Fast x86 32-bit Protected Mode kernel with two-level paging</li>"
+    "<li>Intel e1000 Gigabit network stack with TCP streams</li>"
+    "<li>Embedded Micro-Neural inference model running offline</li>"
+    "<li>Interactive 2D graphical workstation desktop with mouse</li>"
+    "<li>Mini Linux core utilities and HTML web browser</li>"
+    "</ul><hr><h2>Navigation Links</h2>"
+    "<p><a href=\"/var/www/about.html\">About Eran OS</a> | <a href=\"/var/www/help.html\">User Help Guide</a></p>"
+    "</body></html>";
+
+static const char www_about_content[] =
+    "<html><head><title>About Eran OS</title></head><body>"
+    "<h1>About Eran OS Workstation</h1>"
+    "<p>Architected from x86 assembly to freestanding C.</p>"
+    "<h2>Subsystem Overview</h2><ul>"
+    "<li>Kernel: Protected Mode and Long Mode prober</li>"
+    "<li>Filesystem: Virtual Filesystem with ATA IDE persistence</li>"
+    "<li>Networking: TCP RFC 793, BSD Sockets, HTTP client</li>"
+    "<li>Browser: Lightweight HTML parser and document renderer</li>"
+    "</ul><p><a href=\"/var/www/index.html\">Back to Home Portal</a></p>"
+    "</body></html>";
+
+static const char www_help_content[] =
+    "<html><head><title>Eran OS Help & Manual</title></head><body>"
+    "<h1>Mini Linux Command Reference</h1>"
+    "<p>Use the following commands in the terminal:</p><ul>"
+    "<li><b>ls [dir]</b> - List directory files</li>"
+    "<li><b>cat [file]</b> - View file contents</li>"
+    "<li><b>browser [url]</b> - Open web browser</li>"
+    "<li><b>curl [ip]</b> - Fetch HTTP endpoint</li>"
+    "<li><b>uname -a</b> - Print Linux architecture</li>"
+    "<li><b>whoami</b> - Display current user identity</li>"
+    "<li><b>desktop</b> - Launch 2D graphical desktop</li>"
+    "</ul><p><a href=\"/var/www/index.html\">Back to Home Portal</a></p>"
+    "</body></html>";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 static void mystrcpy(char *dest, const char *src, size_t max) {
     size_t i = 0;
     while (src[i] && i < max - 1) {
@@ -71,123 +213,129 @@ static size_t mystrlen(const char *s) {
     return len;
 }
 
+// Helper to initialize a file node
+static void init_file(vfs_node_t *node, const char *name, const char *data, size_t size, vfs_node_t *next) {
+    mystrcpy(node->name, name, sizeof(node->name));
+    node->type = FS_FILE;
+    node->data = data;
+    node->size = size;
+    node->children = 0;
+    node->next = next;
+}
+
+// Helper to initialize a directory node
+static void init_dir(vfs_node_t *node, const char *name, vfs_node_t *children, vfs_node_t *next) {
+    mystrcpy(node->name, name, sizeof(node->name));
+    node->type = FS_DIRECTORY;
+    node->data = 0;
+    node->size = 0;
+    node->children = children;
+    node->next = next;
+}
+
+// ---------------------------------------------------------------------------
+// VFS Initialization
+// ---------------------------------------------------------------------------
 void vfs_init(void) {
-    // Root directory /
-    mystrcpy(root_dir.name, "/", sizeof(root_dir.name));
-    root_dir.type = FS_DIRECTORY;
-    root_dir.children = &file_readme;
-    root_dir.next = 0;
+    // 1. Initialize /bin files
+    init_file(&file_bin_curl,    "curl",      script_curl,    mystrlen(script_curl),    0);
+    init_file(&file_bin_browser, "browser",   script_browser, mystrlen(script_browser), &file_bin_curl);
+    init_file(&file_bin_clear,   "clear",     script_clear,   mystrlen(script_clear),   &file_bin_browser);
+    init_file(&file_bin_date,    "date",      script_date,    mystrlen(script_date),    &file_bin_clear);
+    init_file(&file_bin_whoami,  "whoami",    script_whoami,  mystrlen(script_whoami),  &file_bin_date);
+    init_file(&file_bin_uname,   "uname",     script_uname,   mystrlen(script_uname),   &file_bin_whoami);
+    init_file(&file_bin_pwd,     "pwd",       script_pwd,     mystrlen(script_pwd),     &file_bin_uname);
+    init_file(&file_bin_echo,    "echo",      script_echo,    mystrlen(script_echo),    &file_bin_pwd);
+    init_file(&file_bin_cat,     "cat",       script_cat,     mystrlen(script_cat),     &file_bin_echo);
+    init_file(&file_bin_ls,      "ls",        script_ls,      mystrlen(script_ls),      &file_bin_cat);
+    init_file(&file_bin_sh,      "sh",        script_sh,      mystrlen(script_sh),      &file_bin_ls);
+    init_file(&file_hello_elf,   "hello.elf", (const char *)build_hello_elf, sizeof(build_hello_elf), &file_bin_sh);
+    init_dir(&bin_dir, "bin", &file_hello_elf, &etc_dir);
 
-    // /README.txt
-    mystrcpy(file_readme.name, "README.txt", sizeof(file_readme.name));
-    file_readme.type = FS_FILE;
-    file_readme.size = mystrlen(readme_content);
-    file_readme.data = readme_content;
-    file_readme.children = 0;
-    file_readme.next = &system_dir;
+    // 2. Initialize /etc files
+    init_file(&file_devices,   "devices.txt", devices_content,   mystrlen(devices_content),   0);
+    init_file(&file_motd,      "motd",        motd_content,      mystrlen(motd_content),      &file_devices);
+    init_file(&file_passwd,    "passwd",      passwd_content,    mystrlen(passwd_content),    &file_motd);
+    init_file(&file_osrelease, "os-release",  osrelease_content, mystrlen(osrelease_content), &file_passwd);
+    init_file(&file_issue,     "issue",       issue_content,     mystrlen(issue_content),     &file_osrelease);
+    init_file(&file_hostname,  "hostname",    hostname_content,  mystrlen(hostname_content),  &file_issue);
+    init_dir(&etc_dir, "etc", &file_hostname, &dev_dir);
 
-    // /system/
-    mystrcpy(system_dir.name, "system", sizeof(system_dir.name));
-    system_dir.type = FS_DIRECTORY;
-    system_dir.size = 0;
-    system_dir.children = &file_osinfo;
-    system_dir.next = &etc_dir;
+    // 3. Initialize /dev files
+    init_file(&file_dev_sda,  "sda",  dev_sda_content,  mystrlen(dev_sda_content),  0);
+    init_file(&file_dev_eth0, "eth0", dev_eth0_content, mystrlen(dev_eth0_content), &file_dev_sda);
+    init_file(&file_dev_zero, "zero", dev_zero_content, mystrlen(dev_zero_content), &file_dev_eth0);
+    init_file(&file_dev_null, "null", dev_null_content, mystrlen(dev_null_content), &file_dev_zero);
+    init_file(&file_dev_tty0, "tty0", dev_tty0_content, mystrlen(dev_tty0_content), &file_dev_null);
+    init_dir(&dev_dir, "dev", &file_dev_tty0, &home_dir);
 
-    // /system/os_info.txt
-    mystrcpy(file_osinfo.name, "os_info.txt", sizeof(file_osinfo.name));
-    file_osinfo.type = FS_FILE;
-    file_osinfo.size = mystrlen(osinfo_content);
-    file_osinfo.data = osinfo_content;
-    file_osinfo.children = 0;
-    file_osinfo.next = 0;
+    // 4. Initialize /home and /home/user
+    init_file(&file_home_welcome, "welcome.txt", home_welcome_content, mystrlen(home_welcome_content), 0);
+    init_dir(&user_dir, "user", &file_home_welcome, 0);
+    init_dir(&home_dir, "home", &user_dir, &root_user_dir);
 
-    // /etc/
-    mystrcpy(etc_dir.name, "etc", sizeof(etc_dir.name));
-    etc_dir.type = FS_DIRECTORY;
-    etc_dir.size = 0;
-    etc_dir.children = &file_hostname;
-    etc_dir.next = &bin_dir;
+    // 5. Initialize /root
+    init_file(&file_root_bashrc, ".bashrc", root_bashrc_content, mystrlen(root_bashrc_content), 0);
+    init_dir(&root_user_dir, "root", &file_root_bashrc, &var_dir);
 
-    // /etc/hostname
-    mystrcpy(file_hostname.name, "hostname", sizeof(file_hostname.name));
-    file_hostname.type = FS_FILE;
-    file_hostname.size = mystrlen(hostname_content);
-    file_hostname.data = hostname_content;
-    file_hostname.children = 0;
-    file_hostname.next = &file_devices;
+    // 6. Initialize /var and /var/www
+    init_file(&file_www_help,  "help.html",  www_help_content,  mystrlen(www_help_content),  0);
+    init_file(&file_www_about, "about.html", www_about_content, mystrlen(www_about_content), &file_www_help);
+    init_file(&file_www_index, "index.html", www_index_content, mystrlen(www_index_content), &file_www_about);
+    init_dir(&www_dir, "www", &file_www_index, 0);
+    init_dir(&var_dir, "var", &www_dir, &tmp_dir);
 
-    // /etc/devices.txt
-    mystrcpy(file_devices.name, "devices.txt", sizeof(file_devices.name));
-    file_devices.type = FS_FILE;
-    file_devices.size = mystrlen(devices_content);
-    file_devices.data = devices_content;
-    file_devices.children = 0;
-    file_devices.next = 0;
+    // 7. Initialize /tmp
+    init_dir(&tmp_dir, "tmp", 0, &system_dir);
 
-    // /bin/ (User Executables Directory)
-    mystrcpy(bin_dir.name, "bin", sizeof(bin_dir.name));
-    bin_dir.type = FS_DIRECTORY;
-    bin_dir.size = 0;
-    bin_dir.children = &file_hello_elf;
-    bin_dir.next = 0;
+    // 8. Initialize /system
+    init_file(&file_osinfo, "os_info.txt", osinfo_content, mystrlen(osinfo_content), 0);
+    init_dir(&system_dir, "system", &file_osinfo, 0);
 
-    // /bin/hello.elf (Compiled Standalone Ring 3 ELF32 Binary)
-    mystrcpy(file_hello_elf.name, "hello.elf", sizeof(file_hello_elf.name));
-    file_hello_elf.type = FS_FILE;
-    file_hello_elf.size = sizeof(build_hello_elf);
-    file_hello_elf.data = (const char *)build_hello_elf;
-    file_hello_elf.children = 0;
-    file_hello_elf.next = 0;
+    // 9. Root /
+    init_file(&file_readme, "README.txt", readme_content, mystrlen(readme_content), &bin_dir);
+    init_dir(&root_dir, "/", &file_readme, 0);
 }
 
 vfs_node_t *vfs_get_root(void) {
     return &root_dir;
 }
 
+// ---------------------------------------------------------------------------
+// Multi-Level Hierarchical Path Resolution
+// ---------------------------------------------------------------------------
 vfs_node_t *vfs_find_node(const char *path) {
     if (!path || path[0] == '\0') return 0;
+    while (*path == ' ') path++;
+    if (path[0] == '\0') return 0;
 
+    vfs_node_t *curr = &root_dir;
     if (path[0] == '/') path++;
-    if (path[0] == '\0') return &root_dir;
+    if (path[0] == '\0') return curr;
 
-    // Direct match in root
-    vfs_node_t *curr = root_dir.children;
-    while (curr) {
-        if (mystrcmp(curr->name, path) == 0) return curr;
-        curr = curr->next;
-    }
-
-    // Check /system/
-    if (path[0] == 's' && path[1] == 'y' && path[2] == 's' && path[3] == 't' && path[4] == 'e' && path[5] == 'm' && path[6] == '/') {
-        const char *subpath = path + 7;
-        curr = system_dir.children;
-        while (curr) {
-            if (mystrcmp(curr->name, subpath) == 0) return curr;
-            curr = curr->next;
+    char segment[32];
+    while (*path != '\0') {
+        int idx = 0;
+        while (*path != '\0' && *path != '/' && idx < 31) {
+            segment[idx++] = *path++;
         }
-    }
+        segment[idx] = '\0';
+        while (*path == '/') path++;
 
-    // Check /etc/
-    if (path[0] == 'e' && path[1] == 't' && path[2] == 'c' && path[3] == '/') {
-        const char *subpath = path + 4;
-        curr = etc_dir.children;
-        while (curr) {
-            if (mystrcmp(curr->name, subpath) == 0) return curr;
-            curr = curr->next;
+        vfs_node_t *child = curr->children;
+        vfs_node_t *found = 0;
+        while (child) {
+            if (mystrcmp(child->name, segment) == 0) {
+                found = child;
+                break;
+            }
+            child = child->next;
         }
+        if (!found) return 0;
+        curr = found;
     }
 
-    // Check /bin/
-    if (path[0] == 'b' && path[1] == 'i' && path[2] == 'n' && path[3] == '/') {
-        const char *subpath = path + 4;
-        curr = bin_dir.children;
-        while (curr) {
-            if (mystrcmp(curr->name, subpath) == 0) return curr;
-            curr = curr->next;
-        }
-    }
-
-    return 0;
+    return curr;
 }
 
 void vfs_list_dir(const char *path) {
@@ -208,8 +356,8 @@ void vfs_list_dir(const char *path) {
             vga_puts_color("  [DIR]  ", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
             kprintf("%s/\n", child->name);
         } else {
-            vga_puts_color("  [FILE] ", VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK);
-            kprintf("%s (%d bytes)\n", child->name, child->size);
+            vga_puts_color("  [FILE] ", VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+            kprintf("%s (%u bytes)\n", child->name, child->size);
         }
         child = child->next;
     }
@@ -220,18 +368,17 @@ int vfs_read_file(const char *path, char *buf, size_t max_len) {
     if (!node || node->type != FS_FILE || !node->data) {
         return -1;
     }
-    size_t to_copy = (node->size < max_len - 1) ? node->size : (max_len - 1);
-    for (size_t i = 0; i < to_copy; i++) {
+
+    size_t copy_len = (node->size < max_len - 1) ? node->size : max_len - 1;
+    for (size_t i = 0; i < copy_len; i++) {
         buf[i] = node->data[i];
     }
-    buf[to_copy] = '\0';
-    return (int)to_copy;
+    buf[copy_len] = '\0';
+    return (int)copy_len;
 }
 
 int vfs_create_file(const char *path, const char *initial_data) {
     if (!path || path[0] == '\0') return -1;
-
-    // Check if file already exists
     if (vfs_find_node(path) != 0) return 0; // Already exists
 
     const char *fname = path;
@@ -288,7 +435,7 @@ int vfs_write_file(const char *path, const char *data, size_t len) {
     node->data = data_buf;
     node->size = len;
 
-    // If ATA storage drive is detected, flush block to disk sector 1000
+    // Sync to ATA storage drive
     if (ata_is_detected()) {
         uint8_t sector_buf[512];
         for (int i = 0; i < 512; i++) sector_buf[i] = 0;

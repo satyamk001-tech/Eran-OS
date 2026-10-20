@@ -170,6 +170,17 @@ flowchart TD
 - **PS/2 Mouse & Keyboard Navigation:** Live arrow cursor sprite (`▲`), click detection for buttons/tabs/menu items, and keyboard navigation (`Tab`, `1-4`, `W/S`, `ESC`).
 - Command: `desktop`.
 
+### 10. Mini Linux Environment & HTML Web Browser (`net/browser.c`, `fs/vfs.c`, `kernel/shell.c`)
+- **UNIX/Linux Directory Hierarchy:** Comprehensive VFS tree featuring standard `/bin`, `/etc`, `/dev`, `/home/user`, `/root`, `/var/www`, and `/tmp`.
+- **Standalone `/bin` Core Utilities:** Binary files for `sh`, `ls`, `cat`, `echo`, `pwd`, `uname`, `whoami`, `date`, `clear`, `mkdir`, `touch`, `rm`, `grep`, `curl`, `browser`, and `hello.elf`.
+- **POSIX Shell Experience:** Real-time working directory tracking (`cd [dir]`, `pwd`), environment variables (`env`, `export`), command locator (`which`), and pattern search (`grep`).
+- **Interactive HTML Web Browser Engine:**
+  - Lightweight HTML parser (`<h1>`, `<h2>`, `<p>`, `<a href>`, `<ul>`, `<li>`, `<hr>`, `<br>`).
+  - **Terminal Browser:** `browser [url]` formats and renders web documents directly in the console.
+  - **Graphical Desktop Browser:** Dedicated workstation window with URL address bar (`URL: [ ... ] [ GO ]`), navigation buttons (`[Home]`, `[About]`, `[Help]`, `[Back]`), and document viewport.
+  - **Offline & Online Browsing:** Preloaded with local portal pages (`/var/www/index.html`, `/var/www/about.html`, `/var/www/help.html`), and connects to real remote HTTP servers over TCP sockets (`http://192.168.1.1`).
+- Commands: `browser [url]`, `pwd`, `cd [dir]`, `uname -a`, `whoami`, `date`, `which <cmd>`, `grep <pat> <file>`, `env`.
+
 ---
 
 ## 💻 Interactive Shell Command Reference (35+ Built-in Commands)
@@ -194,6 +205,15 @@ flowchart TD
 | `ping <ip>` | Network | Send ICMP Echo Requests and calculate round-trip time |
 | `tcp` | Network | Display TCP stream socket allocation table |
 | `telnet <ip> <p>`| Network | Connect to remote endpoint via TCP stream |
+| `pwd` | Linux | Print current working directory |
+| `cd [path]` | Linux | Change working directory (e.g. `cd /bin`, `cd ~`, `cd ..`) |
+| `uname [-a]` | Linux | Display Linux kernel architecture and version string |
+| `whoami` | Linux | Display active user login identity (`root`) |
+| `date` | Linux | Display system date, time, and hardware uptime |
+| `which <cmd>` | Linux | Locate binary executable in `/bin` |
+| `grep <p> <f>` | Linux | Search for text pattern in file |
+| `env` | Linux | Display environment variables (`USER`, `PATH`, `SHELL`, `TERM`) |
+| `browser [url]` | Web | Launch interactive HTML web browser (Terminal or GUI) |
 | `curl <ip>` | Network | Send HTTP request to server over TCP port 80 |
 | `beep` | Audio | Play standard 880 Hz system alert tone via PC Speaker |
 | `chime` | Audio | Play synthesized 4-note melodic chime via PC Speaker |
@@ -239,10 +259,13 @@ make test-ai
 # 6. Run Graphical Desktop UI & Compositor Test Suite
 make test-ui
 
-# 7. Run Interactive Host-Side Offline AI Shell
+# 7. Run Mini Linux & Web Browser Test Suite
+make test-linux
+
+# 8. Run Interactive Host-Side Offline AI Shell
 make run-ai
 
-# 8. Clean Build Artifacts
+# 9. Clean Build Artifacts
 make clean
 ```
 

@@ -11,6 +11,7 @@
 #include "../mm/heap.h"
 #include "../hal/acpi.h"
 #include "../user/micro_ai.h"
+#include "../net/browser.h"
 
 // ---------------------------------------------------------------------------
 // Window Types & Global Desktop State
@@ -18,15 +19,23 @@
 typedef enum {
     WIN_AI = 0,
     WIN_TERMINAL = 1,
-    WIN_TELEMETRY = 2,
+    WIN_BROWSER = 2,
     WIN_FILES = 3,
-    WIN_COUNT = 4
+    WIN_TELEMETRY = 4,
+    WIN_COUNT = 5
 } win_type_t;
 
 static int active_win = WIN_AI;
 static int is_maximized = 0;
 static int start_menu_open = 0;
 static int mouse_click_prev = 0;
+
+// Browser input state in GUI
+static char browser_url_input[64] = "http://eranos.local/";
+static int  browser_url_len = 20;
+
+// Terminal current directory in GUI
+static char term_cwd[32] = "/";
 
 // ---------------------------------------------------------------------------
 // String Utility Helpers (Safe Freestanding Implementation)
@@ -146,7 +155,7 @@ static void ai_submit_query(const char *query) {
             ai_add_line("AI: Physical RAM: 32MB Total. Kernel Heap 4MB OK.");
             break;
         case INTENT_STORAGE_FILESYSTEM:
-            ai_add_line("AI: VFS mounted at /. Primary ATA IDE 0x1F0 ready.");
+            ai_add_line("AI: VFS mounted at /. Mini Linux /bin active.");
             break;
         case INTENT_NETWORK_DIAGNOSTICS:
             ai_add_line("AI: eth0: 192.168.1.50/24, Gateway 192.168.1.1 OK.");
@@ -156,20 +165,20 @@ static void ai_submit_query(const char *query) {
             ai_add_line("AI: Melodic sequence synthesized on PC Speaker.");
             break;
         case INTENT_GUI_DESKTOP:
-            ai_add_line("AI: 2D Desktop Compositor active with PS/2 mouse.");
+            ai_add_line("AI: 2D Desktop Compositor active with Web Browser.");
             break;
         case INTENT_SECURITY_PRIVILEGE:
             ai_add_line("AI: Ring 0/3 CPU isolation active. INT 0x80 gate.");
             break;
         case INTENT_GENERAL_HELP:
         default:
-            ai_add_line("AI: Ready. Ask about memory, storage, or audio!");
+            ai_add_line("AI: Ready. Ask about browser, linux, files, audio!");
             break;
     }
 }
 
 // ---------------------------------------------------------------------------
-// Workstation 2: In-GUI Terminal Console Buffer & Mini-Shell
+// Workstation 2: In-GUI Terminal Console Buffer & Mini Linux Shell
 // ---------------------------------------------------------------------------
 #define TERM_MAX_LINES 11
 #define TERM_LINE_LEN  56
@@ -198,15 +207,34 @@ static void term_execute_cmd(const char *cmd) {
     while (*cmd == ' ') cmd++;
     if (*cmd == '\0') return;
 
-    char echo_buf[TERM_LINE_LEN] = "$ ";
-    gui_strncpy(echo_buf + 2, cmd, TERM_LINE_LEN - 3);
+    char echo_buf[TERM_LINE_LEN] = "root@eranos:$ ";
+    gui_strncpy(echo_buf + 14, cmd, TERM_LINE_LEN - 15);
     term_add_line(echo_buf);
 
     if (gui_strcmp(cmd, "help") == 0) {
-        term_add_line("Available Commands:");
-        term_add_line(" uptime, meminfo, ls, cat <file>, touch <file>");
-        term_add_line(" write <file> <text>, battery, acpi, chime, beep, clear");
-    } else if (gui_strcmp(cmd, "uptime") == 0) {
+        term_add_line("Mini Linux Commands:");
+        term_add_line(" pwd, cd [dir], ls, cat <file>, browser [url]");
+        term_add_line(" uname, whoami, date, touch, write, chime, clear");
+    } else if (gui_strcmp(cmd, "pwd") == 0) {
+        term_add_line(term_cwd);
+    } else if (gui_strncmp(cmd, "cd", 2) == 0 && (cmd[2] == ' ' || cmd[2] == '\0')) {
+        const char *arg = cmd + 2;
+        while (*arg == ' ') arg++;
+        if (*arg == '\0' || gui_strcmp(arg, "~") == 0) {
+            gui_strcpy(term_cwd, "/home/user");
+        } else if (gui_strcmp(arg, "/") == 0) {
+            gui_strcpy(term_cwd, "/");
+        } else {
+            gui_strncpy(term_cwd, arg, sizeof(term_cwd) - 1);
+        }
+        char msg[TERM_LINE_LEN] = "Changed directory to ";
+        gui_strncpy(msg + 21, term_cwd, 32);
+        term_add_line(msg);
+    } else if (gui_strncmp(cmd, "uname", 5) == 0) {
+        term_add_line("Linux eranos 0.4.0 #1 SMP i386 GNU/Linux");
+    } else if (gui_strcmp(cmd, "whoami") == 0) {
+        term_add_line("root");
+    } else if (gui_strcmp(cmd, "date") == 0) {
         char buf[TERM_LINE_LEN] = "Uptime: ";
         char num[12];
         gui_u_to_str(timer_get_uptime_seconds(), num);
@@ -215,6 +243,25 @@ static void term_execute_cmd(const char *cmd) {
         gui_u_to_str(timer_get_ticks(), num);
         gui_strncpy(buf + gui_strlen(buf), num, 10);
         gui_strncpy(buf + gui_strlen(buf), ")", 2);
+        term_add_line(buf);
+    } else if (gui_strncmp(cmd, "browser", 7) == 0) {
+        const char *arg = cmd + 7;
+        while (*arg == ' ') arg++;
+        if (*arg == '\0') arg = "http://eranos.local/";
+        browser_navigate(arg);
+        const browser_page_t *bp = browser_get_current_page();
+        char bmsg[TERM_LINE_LEN] = "Browser Title: ";
+        gui_strncpy(bmsg + 15, bp->title, 38);
+        term_add_line(bmsg);
+        for (int i = 0; i < bp->line_count && i < 3; i++) {
+            term_add_line(bp->lines[i]);
+        }
+    } else if (gui_strcmp(cmd, "uptime") == 0) {
+        char buf[TERM_LINE_LEN] = "Uptime: ";
+        char num[12];
+        gui_u_to_str(timer_get_uptime_seconds(), num);
+        gui_strncpy(buf + 8, num, 10);
+        gui_strncpy(buf + gui_strlen(buf), "s", 3);
         term_add_line(buf);
     } else if (gui_strcmp(cmd, "meminfo") == 0) {
         uint32_t total = pmm_get_total_memory_kb() / 1024;
@@ -232,18 +279,10 @@ static void term_execute_cmd(const char *cmd) {
         gui_strncpy(buf + gui_strlen(buf), num, 8);
         gui_strncpy(buf + gui_strlen(buf), "MB", 3);
         term_add_line(buf);
-
-        char hbuf[TERM_LINE_LEN] = "Heap: Used ";
-        gui_u_to_str((uint32_t)heap_get_used(), num);
-        gui_strncpy(hbuf + gui_strlen(hbuf), num, 10);
-        gui_strncpy(hbuf + gui_strlen(hbuf), " B, Free ", 10);
-        gui_u_to_str((uint32_t)heap_get_free(), num);
-        gui_strncpy(hbuf + gui_strlen(hbuf), num, 10);
-        gui_strncpy(hbuf + gui_strlen(hbuf), " B", 3);
-        term_add_line(hbuf);
     } else if (gui_strcmp(cmd, "ls") == 0) {
-        term_add_line("Directory Listing for root '/':");
-        vfs_node_t *r = vfs_get_root();
+        term_add_line("Directory Listing:");
+        vfs_node_t *r = vfs_find_node(term_cwd);
+        if (!r) r = vfs_get_root();
         if (r && r->children) {
             vfs_node_t *c = r->children;
             while (c) {
@@ -321,7 +360,7 @@ static void term_execute_cmd(const char *cmd) {
 }
 
 // ---------------------------------------------------------------------------
-// Workstation 3: VFS File Explorer State & Previews
+// Workstation 4: VFS File Explorer State & Previews
 // ---------------------------------------------------------------------------
 #define FILE_MAX_ITEMS 14
 static char file_names[FILE_MAX_ITEMS][32];
@@ -346,11 +385,11 @@ static void file_refresh_list(void) {
         curr = curr->next;
     }
 
-    vfs_node_t *sys = vfs_find_node("/system");
-    if (sys && sys->children) {
-        curr = sys->children;
+    vfs_node_t *bin = vfs_find_node("/bin");
+    if (bin && bin->children) {
+        curr = bin->children;
         while (curr && file_item_count < FILE_MAX_ITEMS) {
-            char path[32] = "sys/";
+            char path[32] = "bin/";
             gui_strncpy(path + 4, curr->name, 28);
             gui_strncpy(file_names[file_item_count], path, 32);
             file_sizes[file_item_count] = curr->size;
@@ -360,11 +399,11 @@ static void file_refresh_list(void) {
         }
     }
 
-    vfs_node_t *bin = vfs_find_node("/bin");
-    if (bin && bin->children) {
-        curr = bin->children;
+    vfs_node_t *www = vfs_find_node("/var/www");
+    if (www && www->children) {
+        curr = www->children;
         while (curr && file_item_count < FILE_MAX_ITEMS) {
-            char path[32] = "bin/";
+            char path[32] = "www/";
             gui_strncpy(path + 4, curr->name, 28);
             gui_strncpy(file_names[file_item_count], path, 32);
             file_sizes[file_item_count] = curr->size;
@@ -379,14 +418,14 @@ static void file_update_preview(void) {
     file_preview_count = 0;
     if (file_item_count == 0 || file_selected_idx >= file_item_count) return;
 
-    char full_path[40] = "/";
+    char full_path[48] = "/";
     const char *sel = file_names[file_selected_idx];
-    if (gui_strncmp(sel, "sys/", 4) == 0) {
-        gui_strcpy(full_path, "/system/");
-        gui_strcpy(full_path + 8, sel + 4);
-    } else if (gui_strncmp(sel, "bin/", 4) == 0) {
+    if (gui_strncmp(sel, "bin/", 4) == 0) {
         gui_strcpy(full_path, "/bin/");
         gui_strcpy(full_path + 5, sel + 4);
+    } else if (gui_strncmp(sel, "www/", 4) == 0) {
+        gui_strcpy(full_path, "/var/www/");
+        gui_strcpy(full_path + 9, sel + 4);
     } else {
         gui_strcpy(full_path + 1, sel);
     }
@@ -430,18 +469,15 @@ static void draw_telemetry_pane(int x, int y, int w, int h) {
     (void)h;
     uint8_t bg = VGA_COLOR_BLACK;
 
-    // CPU Architecture Header
     gfx_draw_string(x + 2, y + 2, "CPU Architecture", VGA_COLOR_LIGHT_CYAN, bg);
     gfx_draw_string(x + 2, y + 3, "x86 32-bit (x86_64 Capable)", VGA_COLOR_WHITE, bg);
 
-    // RAM Usage Gauge
     uint32_t total_ram = pmm_get_total_memory_kb() / 1024;
     uint32_t used_ram = pmm_get_used_memory_kb() / 1024;
     int ram_pct = (total_ram > 0) ? (int)(used_ram * 100 / total_ram) : 10;
     gfx_draw_string(x + 2, y + 5, "RAM: 32MB Total", VGA_COLOR_LIGHT_GREEN, bg);
     gfx_draw_progress_bar(x + 2, y + 6, w - 4, ram_pct, VGA_COLOR_LIGHT_GREEN, bg);
 
-    // Dynamic Kernel Heap Gauge
     size_t heap_used = heap_get_used();
     size_t heap_free = heap_get_free();
     size_t heap_tot = heap_used + heap_free;
@@ -449,16 +485,13 @@ static void draw_telemetry_pane(int x, int y, int w, int h) {
     gfx_draw_string(x + 2, y + 8, "Heap: 4MB Dynamic", VGA_COLOR_LIGHT_CYAN, bg);
     gfx_draw_progress_bar(x + 2, y + 9, w - 4, heap_pct, VGA_COLOR_LIGHT_CYAN, bg);
 
-    // Laptop Battery & AC Mains Gauge
     gfx_draw_string(x + 2, y + 11, "Battery: 94% [AC Online]", VGA_COLOR_LIGHT_BROWN, bg);
     gfx_draw_progress_bar(x + 2, y + 12, w - 4, 94, VGA_COLOR_LIGHT_GREEN, bg);
 
-    // Subsystems
     gfx_draw_string(x + 2, y + 14, "Net : 192.168.1.50 (e1000)", VGA_COLOR_LIGHT_GREY, bg);
     gfx_draw_string(x + 2, y + 15, "Disk: ATA IDE 0x1F0 LBA", VGA_COLOR_LIGHT_GREY, bg);
-    gfx_draw_string(x + 2, y + 16, "Audio: 8254 PIT Ch 2", VGA_COLOR_LIGHT_GREY, bg);
+    gfx_draw_string(x + 2, y + 16, "Web : EranWebKit v1.0", VGA_COLOR_LIGHT_CYAN, bg);
 
-    // Live Uptime
     char uptime_str[24] = "Uptime: ";
     char sec_buf[10];
     gui_u_to_str(timer_get_uptime_seconds(), sec_buf);
@@ -466,7 +499,6 @@ static void draw_telemetry_pane(int x, int y, int w, int h) {
     gui_strncpy(uptime_str + gui_strlen(uptime_str), " sec", 5);
     gfx_draw_string(x + 2, y + 18, uptime_str, VGA_COLOR_WHITE, bg);
 
-    // Mouse coordinates
     const mouse_state_t *ms = mouse_get_state();
     if (ms) {
         char mouse_str[24] = "Cursor: (";
@@ -482,20 +514,59 @@ static void draw_telemetry_pane(int x, int y, int w, int h) {
 }
 
 // ---------------------------------------------------------------------------
+// Workstation 3: Web Browser Canvas Renderer
+// ---------------------------------------------------------------------------
+static void draw_browser_pane(int x, int y, int w, int h) {
+    uint8_t bg = VGA_COLOR_BLACK;
+
+    // Header & Document Title
+    const browser_page_t *bp = browser_get_current_page();
+    gfx_draw_string(x + 2, y + 2, "WebKit v1.0 |", VGA_COLOR_LIGHT_CYAN, bg);
+    gfx_draw_string(x + 16, y + 2, bp->title, VGA_COLOR_WHITE, bg);
+
+    // Address Bar
+    gfx_fill_rect(x + 2, y + 3, w - 4, 1, ' ', VGA_COLOR_WHITE, VGA_COLOR_DARK_GREY);
+    gfx_draw_string(x + 2, y + 3, "URL:", VGA_COLOR_LIGHT_GREEN, VGA_COLOR_DARK_GREY);
+    gfx_draw_string(x + 7, y + 3, browser_url_input, VGA_COLOR_WHITE, VGA_COLOR_DARK_GREY);
+    gfx_put_char(x + 7 + browser_url_len, y + 3, '_', VGA_COLOR_LIGHT_GREEN, VGA_COLOR_DARK_GREY);
+    if (w >= 36) {
+        gfx_draw_string(x + w - 7, y + 3, "[GO]", VGA_COLOR_BLACK, VGA_COLOR_CYAN);
+    }
+
+    // Navigation Buttons
+    gfx_draw_string(x + 2, y + 4, "[Home]", VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY);
+    gfx_draw_string(x + 9, y + 4, "[About]", VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY);
+    gfx_draw_string(x + 17, y + 4, "[Help]", VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY);
+    gfx_draw_string(x + 24, y + 4, "[200 OK]", VGA_COLOR_LIGHT_GREEN, bg);
+
+    // Rendered Web Page Viewport
+    for (int i = 0; i < bp->line_count && y + 6 + i < y + h - 2; i++) {
+        uint8_t fg = VGA_COLOR_LIGHT_GREY;
+        if (bp->lines[i][0] == '=' && bp->lines[i][1] == '=') fg = VGA_COLOR_LIGHT_CYAN;
+        else if (bp->lines[i][0] == '*') fg = VGA_COLOR_WHITE;
+        else if (bp->lines[i][0] == '-' && bp->lines[i][1] == '-') fg = VGA_COLOR_DARK_GREY;
+        gfx_draw_string(x + 2, y + 6 + i, bp->lines[i], fg, bg);
+    }
+
+    gfx_draw_string(x + 2, y + h - 2, "[Click [Home]/[About] or type URL & ENTER]", VGA_COLOR_DARK_GREY, bg);
+}
+
+// ---------------------------------------------------------------------------
 // Desktop Initialization
 // ---------------------------------------------------------------------------
 void desktop_init(void) {
     gfx_init();
+    browser_init();
 
-    // Initialize default AI chat lines
+    // Default AI lines
     ai_line_count = 0;
-    ai_add_line("AI: Welcome to Eran OS Native AI Assistant!");
+    ai_add_line("AI: Welcome to Eran OS Mini Linux Assistant!");
     ai_add_line("AI: Embedded Micro-Neural Model loaded offline.");
-    ai_add_line("AI: Ask about memory, storage, network, or audio.");
+    ai_add_line("AI: Ask about browser, linux, files, or audio.");
 
-    // Initialize default Terminal lines
+    // Default Terminal lines
     term_line_count = 0;
-    term_add_line("Eran OS Graphical Workstation Shell Console");
+    term_add_line("Eran OS Mini Linux Workstation Shell Console");
     term_add_line("Connected to Kernel Subsystems. Ring 0/3 Active.");
     term_add_line("Type 'help' to see list of available commands.");
 
@@ -508,7 +579,7 @@ void desktop_init(void) {
 // Desktop Render Compositor
 // ---------------------------------------------------------------------------
 void desktop_render(void) {
-    // 1. Wallpaper Background (Deep Royal Blue with subtle light blue micro-dots)
+    // 1. Wallpaper Background (Deep Royal Blue with light blue micro-dots)
     gfx_clear(VGA_COLOR_BLUE);
     for (int y = 1; y < CANVAS_HEIGHT - 1; y += 2) {
         for (int x = 2; x < CANVAS_WIDTH - 2; x += 4) {
@@ -534,31 +605,29 @@ void desktop_render(void) {
                     (active_win == WIN_AI) ? VGA_COLOR_WHITE : VGA_COLOR_BLACK,
                     (active_win == WIN_AI) ? VGA_COLOR_BLUE : VGA_COLOR_LIGHT_GREY);
 
-    gfx_draw_string(41, 0, "Monitor",
+    gfx_draw_string(41, 0, "Browser",
+                    (active_win == WIN_BROWSER) ? VGA_COLOR_WHITE : VGA_COLOR_BLACK,
+                    (active_win == WIN_BROWSER) ? VGA_COLOR_BLUE : VGA_COLOR_LIGHT_GREY);
+
+    gfx_draw_string(50, 0, "Monitor",
                     (active_win == WIN_TELEMETRY) ? VGA_COLOR_WHITE : VGA_COLOR_BLACK,
                     (active_win == WIN_TELEMETRY) ? VGA_COLOR_BLUE : VGA_COLOR_LIGHT_GREY);
 
-    gfx_draw_string(50, 0, "[Audio]", VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY);
+    gfx_draw_string(59, 0, "[Audio]", VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY);
 
     // Top status indicators
-    char up_str[16] = "Up: ";
-    char up_sec[8];
-    gui_u_to_str(timer_get_uptime_seconds(), up_sec);
-    gui_strncpy(up_str + 4, up_sec, 6);
-    gui_strncpy(up_str + gui_strlen(up_str), "s", 2);
-    gfx_draw_string(59, 0, up_str, VGA_COLOR_DARK_GREY, VGA_COLOR_LIGHT_GREY);
-
     gfx_draw_string(68, 0, "94%", VGA_COLOR_LIGHT_GREEN, VGA_COLOR_LIGHT_GREY);
     gfx_draw_string(73, 0, "Ring3", VGA_COLOR_BLUE, VGA_COLOR_LIGHT_GREY);
 
     // 3. Render Windows Layout
     if (is_maximized) {
-        // Maximized Layout: 1 Wide Window (78 cols)
+        // Maximized Layout: 1 Wide Window (77 cols)
         int wx = 1, wy = 2, ww = 77, wh = 21;
         gfx_draw_shadow(wx, wy, ww, wh);
 
         const char *title = (active_win == WIN_AI) ? " Eran AI Productivity Core " :
-                            (active_win == WIN_TERMINAL) ? " Interactive Shell Console " :
+                            (active_win == WIN_TERMINAL) ? " Interactive Mini Linux Terminal " :
+                            (active_win == WIN_BROWSER) ? " Eran Web Browser " :
                             (active_win == WIN_FILES) ? " VFS File Explorer " :
                             " System Telemetry & HAL ";
 
@@ -570,24 +639,24 @@ void desktop_render(void) {
                 uint8_t fg = (ai_lines[i][0] == 'Y') ? VGA_COLOR_WHITE : VGA_COLOR_LIGHT_CYAN;
                 gfx_draw_string(wx + 2, wy + 4 + i, ai_lines[i], fg, VGA_COLOR_BLACK);
             }
-            // Prompt input
             gfx_fill_rect(wx + 2, wy + wh - 3, ww - 4, 1, ' ', VGA_COLOR_WHITE, VGA_COLOR_DARK_GREY);
             gfx_draw_string(wx + 2, wy + wh - 3, "> ", VGA_COLOR_LIGHT_GREEN, VGA_COLOR_DARK_GREY);
             gfx_draw_string(wx + 4, wy + wh - 3, ai_input, VGA_COLOR_WHITE, VGA_COLOR_DARK_GREY);
             gfx_put_char(wx + 4 + ai_input_len, wy + wh - 3, '_', VGA_COLOR_LIGHT_GREEN, VGA_COLOR_DARK_GREY);
-            gfx_draw_string(wx + 2, wy + wh - 2, "[Type query & press ENTER. Try 'memory', 'audio', 'files']", VGA_COLOR_DARK_GREY, VGA_COLOR_BLACK);
+            gfx_draw_string(wx + 2, wy + wh - 2, "[Type query & press ENTER. Try 'browser', 'memory', 'files']", VGA_COLOR_DARK_GREY, VGA_COLOR_BLACK);
         } else if (active_win == WIN_TERMINAL) {
-            gfx_draw_string(wx + 2, wy + 2, "Eran OS v0.4.0 Interactive GUI Terminal Console", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+            gfx_draw_string(wx + 2, wy + 2, "Eran OS Mini Linux Terminal Console", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
             for (int i = 0; i < term_line_count; i++) {
-                uint8_t fg = (term_lines[i][0] == '$') ? VGA_COLOR_WHITE : VGA_COLOR_LIGHT_GREY;
+                uint8_t fg = (term_lines[i][0] == 'r') ? VGA_COLOR_WHITE : VGA_COLOR_LIGHT_GREY;
                 gfx_draw_string(wx + 2, wy + 4 + i, term_lines[i], fg, VGA_COLOR_BLACK);
             }
-            // Prompt input
             gfx_fill_rect(wx + 2, wy + wh - 3, ww - 4, 1, ' ', VGA_COLOR_WHITE, VGA_COLOR_DARK_GREY);
             gfx_draw_string(wx + 2, wy + wh - 3, "$ ", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_DARK_GREY);
             gfx_draw_string(wx + 4, wy + wh - 3, term_input, VGA_COLOR_WHITE, VGA_COLOR_DARK_GREY);
             gfx_put_char(wx + 4 + term_input_len, wy + wh - 3, '_', VGA_COLOR_WHITE, VGA_COLOR_DARK_GREY);
-            gfx_draw_string(wx + 2, wy + wh - 2, "[Type commands: uptime, meminfo, ls, cat, touch, write, chime]", VGA_COLOR_DARK_GREY, VGA_COLOR_BLACK);
+            gfx_draw_string(wx + 2, wy + wh - 2, "[Type commands: pwd, cd, ls, cat, browser, uname, whoami, chime]", VGA_COLOR_DARK_GREY, VGA_COLOR_BLACK);
+        } else if (active_win == WIN_BROWSER) {
+            draw_browser_pane(wx, wy, ww, wh);
         } else if (active_win == WIN_FILES) {
             gfx_draw_string(wx + 2, wy + 2, "Virtual Filesystem Browser [/]", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
             for (int i = 0; i < file_item_count; i++) {
@@ -599,7 +668,6 @@ void desktop_render(void) {
                 gui_strncpy(entry + gui_strlen(entry), file_names[i], 24);
                 gfx_draw_string(wx + 2, wy + 4 + i, entry, fg, bg);
             }
-            // File preview
             gfx_draw_box(wx + 38, wy + 4, 36, 12, VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK, " Preview ");
             for (int p = 0; p < file_preview_count; p++) {
                 gfx_draw_string(wx + 40, wy + 6 + p, file_preview[p], VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK);
@@ -617,38 +685,38 @@ void desktop_render(void) {
         gfx_draw_shadow(rx, ry, rw, rh);
 
         const char *ltitle = (active_win == WIN_AI) ? " Eran AI Productivity Core " :
-                             (active_win == WIN_TERMINAL) ? " Interactive Shell Console " :
+                             (active_win == WIN_TERMINAL) ? " Mini Linux Terminal " :
+                             (active_win == WIN_BROWSER) ? " Eran Web Browser " :
                              (active_win == WIN_FILES) ? " VFS File Explorer " :
                              " System Telemetry & HAL ";
 
         gfx_draw_double_box(lx, ly, lw, lh, VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK, ltitle);
         gfx_draw_double_box(rx, ry, rw, rh, VGA_COLOR_WHITE, VGA_COLOR_BLACK, " Hardware HAL ");
 
-        // Draw Left Window Content
         if (active_win == WIN_AI) {
             gfx_draw_string(lx + 2, ly + 2, ai_badge, VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREEN);
             for (int i = 0; i < ai_line_count; i++) {
                 uint8_t fg = (ai_lines[i][0] == 'Y') ? VGA_COLOR_WHITE : VGA_COLOR_LIGHT_CYAN;
                 gfx_draw_string(lx + 2, ly + 4 + i, ai_lines[i], fg, VGA_COLOR_BLACK);
             }
-            // Prompt input box
             gfx_fill_rect(lx + 2, ly + lh - 3, lw - 4, 1, ' ', VGA_COLOR_WHITE, VGA_COLOR_DARK_GREY);
             gfx_draw_string(lx + 2, ly + lh - 3, "> ", VGA_COLOR_LIGHT_GREEN, VGA_COLOR_DARK_GREY);
             gfx_draw_string(lx + 4, ly + lh - 3, ai_input, VGA_COLOR_WHITE, VGA_COLOR_DARK_GREY);
             gfx_put_char(lx + 4 + ai_input_len, ly + lh - 3, '_', VGA_COLOR_LIGHT_GREEN, VGA_COLOR_DARK_GREY);
-            gfx_draw_string(lx + 2, ly + lh - 2, "[Type query & ENTER. Try 'memory']", VGA_COLOR_DARK_GREY, VGA_COLOR_BLACK);
+            gfx_draw_string(lx + 2, ly + lh - 2, "[Type query & ENTER. Try 'browser']", VGA_COLOR_DARK_GREY, VGA_COLOR_BLACK);
         } else if (active_win == WIN_TERMINAL) {
-            gfx_draw_string(lx + 2, ly + 2, "Eran OS GUI Shell Console", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+            gfx_draw_string(lx + 2, ly + 2, "Mini Linux Terminal Shell", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
             for (int i = 0; i < term_line_count; i++) {
-                uint8_t fg = (term_lines[i][0] == '$') ? VGA_COLOR_WHITE : VGA_COLOR_LIGHT_GREY;
+                uint8_t fg = (term_lines[i][0] == 'r') ? VGA_COLOR_WHITE : VGA_COLOR_LIGHT_GREY;
                 gfx_draw_string(lx + 2, ly + 4 + i, term_lines[i], fg, VGA_COLOR_BLACK);
             }
-            // Prompt input box
             gfx_fill_rect(lx + 2, ly + lh - 3, lw - 4, 1, ' ', VGA_COLOR_WHITE, VGA_COLOR_DARK_GREY);
             gfx_draw_string(lx + 2, ly + lh - 3, "$ ", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_DARK_GREY);
             gfx_draw_string(lx + 4, ly + lh - 3, term_input, VGA_COLOR_WHITE, VGA_COLOR_DARK_GREY);
             gfx_put_char(lx + 4 + term_input_len, ly + lh - 3, '_', VGA_COLOR_WHITE, VGA_COLOR_DARK_GREY);
-            gfx_draw_string(lx + 2, ly + lh - 2, "[Type: uptime, meminfo, ls, cat, chime]", VGA_COLOR_DARK_GREY, VGA_COLOR_BLACK);
+            gfx_draw_string(lx + 2, ly + lh - 2, "[Type: pwd, cd, ls, cat, browser, uname]", VGA_COLOR_DARK_GREY, VGA_COLOR_BLACK);
+        } else if (active_win == WIN_BROWSER) {
+            draw_browser_pane(lx, ly, lw, lh);
         } else if (active_win == WIN_FILES) {
             gfx_draw_string(lx + 2, ly + 2, "Virtual Filesystem [/]", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
             int max_display = (file_item_count < 6) ? file_item_count : 6;
@@ -661,7 +729,6 @@ void desktop_render(void) {
                 gui_strncpy(entry + gui_strlen(entry), file_names[i], 24);
                 gfx_draw_string(lx + 2, ly + 4 + i, entry, fg, bg);
             }
-            // File preview box
             gfx_draw_box(lx + 2, ly + 11, lw - 4, 7, VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK, " Preview ");
             for (int p = 0; p < file_preview_count; p++) {
                 gfx_draw_string(lx + 4, ly + 13 + p, file_preview[p], VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK);
@@ -671,26 +738,26 @@ void desktop_render(void) {
             draw_telemetry_pane(lx, ly, lw, lh);
         }
 
-        // Draw Right Window Content (Always Live Telemetry in Split View)
         draw_telemetry_pane(rx, ry, rw, rh);
     }
 
     // 4. Start Menu Pop-up (when active)
     if (start_menu_open) {
-        int smx = 1, smy = 9, smw = 34, smh = 14;
+        int smx = 1, smy = 8, smw = 34, smh = 15;
         gfx_draw_shadow(smx, smy, smw, smh);
         gfx_draw_double_box(smx, smy, smw, smh, VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLUE, " ERAN OS MENU ");
 
         gfx_draw_string(smx + 3, smy + 2, "[1] Eran AI Assistant", VGA_COLOR_WHITE, VGA_COLOR_BLUE);
         gfx_draw_string(smx + 3, smy + 3, "[2] Terminal Console", VGA_COLOR_WHITE, VGA_COLOR_BLUE);
-        gfx_draw_string(smx + 3, smy + 4, "[3] Hardware Telemetry", VGA_COLOR_WHITE, VGA_COLOR_BLUE);
+        gfx_draw_string(smx + 3, smy + 4, "[3] Mini Web Browser", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLUE);
         gfx_draw_string(smx + 3, smy + 5, "[4] VFS File Explorer", VGA_COLOR_WHITE, VGA_COLOR_BLUE);
-        gfx_draw_string(smx + 2, smy + 6, "------------------------------", VGA_COLOR_CYAN, VGA_COLOR_BLUE);
-        gfx_draw_string(smx + 3, smy + 7, "[5] Play Melodic Chime", VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLUE);
-        gfx_draw_string(smx + 3, smy + 8, "[6] ACPI Power Off", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLUE);
-        gfx_draw_string(smx + 3, smy + 9, "[7] System Reboot", VGA_COLOR_LIGHT_BROWN, VGA_COLOR_BLUE);
-        gfx_draw_string(smx + 3, smy + 10, "[8] Exit to Shell (ESC)", VGA_COLOR_WHITE, VGA_COLOR_BLUE);
-        gfx_draw_string(smx + 3, smy + 12, "Press [1-8] or click item", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLUE);
+        gfx_draw_string(smx + 3, smy + 6, "[5] Hardware Telemetry", VGA_COLOR_WHITE, VGA_COLOR_BLUE);
+        gfx_draw_string(smx + 2, smy + 7, "------------------------------", VGA_COLOR_CYAN, VGA_COLOR_BLUE);
+        gfx_draw_string(smx + 3, smy + 8, "[6] Play Melodic Chime", VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLUE);
+        gfx_draw_string(smx + 3, smy + 9, "[7] ACPI Power Off", VGA_COLOR_LIGHT_RED, VGA_COLOR_BLUE);
+        gfx_draw_string(smx + 3, smy + 10, "[8] System Reboot", VGA_COLOR_LIGHT_BROWN, VGA_COLOR_BLUE);
+        gfx_draw_string(smx + 3, smy + 11, "[9] Exit to Shell (ESC)", VGA_COLOR_WHITE, VGA_COLOR_BLUE);
+        gfx_draw_string(smx + 3, smy + 13, "Press [1-9] or click item", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLUE);
     }
 
     // 5. Bottom Taskbar
@@ -702,23 +769,27 @@ void desktop_render(void) {
                     start_menu_open ? VGA_COLOR_RED : VGA_COLOR_CYAN);
 
     // Window Tabs
-    gfx_draw_string(11, CANVAS_HEIGHT - 1, "[1: AI Core]",
+    gfx_draw_string(11, CANVAS_HEIGHT - 1, "[1: AI]",
                     (active_win == WIN_AI) ? VGA_COLOR_WHITE : VGA_COLOR_DARK_GREY,
                     (active_win == WIN_AI) ? VGA_COLOR_BLUE : VGA_COLOR_LIGHT_GREY);
 
-    gfx_draw_string(24, CANVAS_HEIGHT - 1, "[2: Terminal]",
+    gfx_draw_string(19, CANVAS_HEIGHT - 1, "[2: Term]",
                     (active_win == WIN_TERMINAL) ? VGA_COLOR_WHITE : VGA_COLOR_DARK_GREY,
                     (active_win == WIN_TERMINAL) ? VGA_COLOR_BLUE : VGA_COLOR_LIGHT_GREY);
 
-    gfx_draw_string(38, CANVAS_HEIGHT - 1, "[3: HAL]",
-                    (active_win == WIN_TELEMETRY) ? VGA_COLOR_WHITE : VGA_COLOR_DARK_GREY,
-                    (active_win == WIN_TELEMETRY) ? VGA_COLOR_BLUE : VGA_COLOR_LIGHT_GREY);
+    gfx_draw_string(29, CANVAS_HEIGHT - 1, "[3: Web]",
+                    (active_win == WIN_BROWSER) ? VGA_COLOR_WHITE : VGA_COLOR_DARK_GREY,
+                    (active_win == WIN_BROWSER) ? VGA_COLOR_BLUE : VGA_COLOR_LIGHT_GREY);
 
-    gfx_draw_string(47, CANVAS_HEIGHT - 1, "[4: Files]",
+    gfx_draw_string(38, CANVAS_HEIGHT - 1, "[4: Files]",
                     (active_win == WIN_FILES) ? VGA_COLOR_WHITE : VGA_COLOR_DARK_GREY,
                     (active_win == WIN_FILES) ? VGA_COLOR_BLUE : VGA_COLOR_LIGHT_GREY);
 
-    // Quick action buttons
+    gfx_draw_string(49, CANVAS_HEIGHT - 1, "[5: HAL]",
+                    (active_win == WIN_TELEMETRY) ? VGA_COLOR_WHITE : VGA_COLOR_DARK_GREY,
+                    (active_win == WIN_TELEMETRY) ? VGA_COLOR_BLUE : VGA_COLOR_LIGHT_GREY);
+
+    // Action buttons
     gfx_draw_string(58, CANVAS_HEIGHT - 1, "[Chime]", VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY);
     gfx_draw_string(66, CANVAS_HEIGHT - 1, is_maximized ? "[Split]" : "[Max]", VGA_COLOR_BLACK, VGA_COLOR_LIGHT_GREY);
     gfx_draw_string(74, CANVAS_HEIGHT - 1, "[Exit]", VGA_COLOR_LIGHT_RED, VGA_COLOR_LIGHT_GREY);
@@ -755,20 +826,16 @@ void desktop_interactive(void) {
                     if (ms->y == CANVAS_HEIGHT - 1) {
                         if (ms->x < 10) {
                             start_menu_open = !start_menu_open;
-                        } else if (ms->x >= 11 && ms->x < 23) {
-                            active_win = WIN_AI;
-                            start_menu_open = 0;
-                        } else if (ms->x >= 24 && ms->x < 37) {
-                            active_win = WIN_TERMINAL;
-                            start_menu_open = 0;
-                        } else if (ms->x >= 38 && ms->x < 46) {
-                            active_win = WIN_TELEMETRY;
-                            start_menu_open = 0;
-                        } else if (ms->x >= 47 && ms->x < 57) {
-                            active_win = WIN_FILES;
-                            start_menu_open = 0;
-                            file_refresh_list();
-                            file_update_preview();
+                        } else if (ms->x >= 11 && ms->x < 18) {
+                            active_win = WIN_AI; start_menu_open = 0;
+                        } else if (ms->x >= 19 && ms->x < 28) {
+                            active_win = WIN_TERMINAL; start_menu_open = 0;
+                        } else if (ms->x >= 29 && ms->x < 37) {
+                            active_win = WIN_BROWSER; start_menu_open = 0;
+                        } else if (ms->x >= 38 && ms->x < 48) {
+                            active_win = WIN_FILES; start_menu_open = 0; file_refresh_list(); file_update_preview();
+                        } else if (ms->x >= 49 && ms->x < 57) {
+                            active_win = WIN_TELEMETRY; start_menu_open = 0;
                         } else if (ms->x >= 58 && ms->x < 65) {
                             audio_chime();
                         } else if (ms->x >= 66 && ms->x < 73) {
@@ -782,30 +849,27 @@ void desktop_interactive(void) {
                         if (ms->x < 14) {
                             start_menu_open = !start_menu_open;
                         } else if (ms->x >= 15 && ms->x < 21) {
-                            active_win = WIN_FILES;
-                            start_menu_open = 0;
-                            file_refresh_list();
-                            file_update_preview();
+                            active_win = WIN_FILES; start_menu_open = 0; file_refresh_list(); file_update_preview();
                         } else if (ms->x >= 22 && ms->x < 31) {
-                            active_win = WIN_TERMINAL;
-                            start_menu_open = 0;
+                            active_win = WIN_TERMINAL; start_menu_open = 0;
                         } else if (ms->x >= 32 && ms->x < 40) {
-                            active_win = WIN_AI;
-                            start_menu_open = 0;
+                            active_win = WIN_AI; start_menu_open = 0;
                         } else if (ms->x >= 41 && ms->x < 49) {
-                            active_win = WIN_TELEMETRY;
-                            start_menu_open = 0;
+                            active_win = WIN_BROWSER; start_menu_open = 0;
                         } else if (ms->x >= 50 && ms->x < 58) {
+                            active_win = WIN_TELEMETRY; start_menu_open = 0;
+                        } else if (ms->x >= 59 && ms->x < 66) {
                             audio_chime();
                         }
                     }
                     // Check Start Menu Clicks
                     else if (start_menu_open) {
-                        if (ms->x >= 1 && ms->x <= 35 && ms->y >= 11 && ms->y <= 21) {
-                            if (ms->y == 11) { active_win = WIN_AI; start_menu_open = 0; }
-                            else if (ms->y == 12) { active_win = WIN_TERMINAL; start_menu_open = 0; }
-                            else if (ms->y == 13) { active_win = WIN_TELEMETRY; start_menu_open = 0; }
-                            else if (ms->y == 14) { active_win = WIN_FILES; start_menu_open = 0; file_refresh_list(); file_update_preview(); }
+                        if (ms->x >= 1 && ms->x <= 35 && ms->y >= 10 && ms->y <= 21) {
+                            if (ms->y == 10) { active_win = WIN_AI; start_menu_open = 0; }
+                            else if (ms->y == 11) { active_win = WIN_TERMINAL; start_menu_open = 0; }
+                            else if (ms->y == 12) { active_win = WIN_BROWSER; start_menu_open = 0; }
+                            else if (ms->y == 13) { active_win = WIN_FILES; start_menu_open = 0; file_refresh_list(); file_update_preview(); }
+                            else if (ms->y == 14) { active_win = WIN_TELEMETRY; start_menu_open = 0; }
                             else if (ms->y == 16) { audio_chime(); start_menu_open = 0; }
                             else if (ms->y == 17) { acpi_poweroff(); }
                             else if (ms->y == 18) { acpi_reboot(); }
@@ -814,10 +878,25 @@ void desktop_interactive(void) {
                             start_menu_open = 0;
                         }
                     }
+                    // Check Browser Navigation Buttons
+                    else if (active_win == WIN_BROWSER && ms->y == 6) {
+                        if (ms->x >= 3 && ms->x <= 9) {
+                            browser_navigate("http://eranos.local/index.html");
+                            gui_strcpy(browser_url_input, "http://eranos.local/index.html");
+                            browser_url_len = gui_strlen(browser_url_input);
+                        } else if (ms->x >= 10 && ms->x <= 17) {
+                            browser_navigate("http://eranos.local/about.html");
+                            gui_strcpy(browser_url_input, "http://eranos.local/about.html");
+                            browser_url_len = gui_strlen(browser_url_input);
+                        } else if (ms->x >= 18 && ms->x <= 25) {
+                            browser_navigate("http://eranos.local/help.html");
+                            gui_strcpy(browser_url_input, "http://eranos.local/help.html");
+                            browser_url_len = gui_strlen(browser_url_input);
+                        }
+                    }
                     // Check Window Controls (Close [■] or Maximize [^])
                     else if (ms->y == 2) {
                         if (ms->x >= 3 && ms->x <= 5) {
-                            // Close/Next window
                             active_win = (active_win + 1) % WIN_COUNT;
                             if (active_win == WIN_FILES) {
                                 file_refresh_list();
@@ -855,12 +934,13 @@ void desktop_interactive(void) {
             if (start_menu_open) {
                 if (c == '1') { active_win = WIN_AI; start_menu_open = 0; }
                 else if (c == '2') { active_win = WIN_TERMINAL; start_menu_open = 0; }
-                else if (c == '3') { active_win = WIN_TELEMETRY; start_menu_open = 0; }
+                else if (c == '3') { active_win = WIN_BROWSER; start_menu_open = 0; }
                 else if (c == '4') { active_win = WIN_FILES; start_menu_open = 0; file_refresh_list(); file_update_preview(); }
-                else if (c == '5') { audio_chime(); start_menu_open = 0; }
-                else if (c == '6') { acpi_poweroff(); }
-                else if (c == '7') { acpi_reboot(); }
-                else if (c == '8' || c == 27) { start_menu_open = 0; }
+                else if (c == '5') { active_win = WIN_TELEMETRY; start_menu_open = 0; }
+                else if (c == '6') { audio_chime(); start_menu_open = 0; }
+                else if (c == '7') { acpi_poweroff(); }
+                else if (c == '8') { acpi_reboot(); }
+                else if (c == '9' || c == 27) { start_menu_open = 0; }
             } else {
                 if (c == 27) { // ESC key
                     running = 0;
@@ -902,6 +982,20 @@ void desktop_interactive(void) {
                             ai_input[ai_input_len] = '\0';
                         }
                     }
+                } else if (active_win == WIN_BROWSER) {
+                    if (c == '\n') {
+                        browser_navigate(browser_url_input);
+                    } else if (c == '\b') {
+                        if (browser_url_len > 0) {
+                            browser_url_len--;
+                            browser_url_input[browser_url_len] = '\0';
+                        }
+                    } else if (c >= 32 && c <= 126) {
+                        if (browser_url_len < 60) {
+                            browser_url_input[browser_url_len++] = c;
+                            browser_url_input[browser_url_len] = '\0';
+                        }
+                    }
                 } else if (active_win == WIN_FILES) {
                     if (c == 'w' || c == 'k') {
                         if (file_selected_idx > 0) {
@@ -917,16 +1011,18 @@ void desktop_interactive(void) {
                         file_update_preview();
                     } else if (c == '1') { active_win = WIN_AI; }
                     else if (c == '2') { active_win = WIN_TERMINAL; }
-                    else if (c == '3') { active_win = WIN_TELEMETRY; }
+                    else if (c == '3') { active_win = WIN_BROWSER; }
                     else if (c == '4') { active_win = WIN_FILES; }
+                    else if (c == '5') { active_win = WIN_TELEMETRY; }
                     else if (c == 'b' || c == 'B') { audio_chime(); }
                     else if (c == 'f' || c == 'F') { is_maximized = !is_maximized; }
                     else if (c == 'q' || c == 'Q') { running = 0; }
                 } else if (active_win == WIN_TELEMETRY) {
                     if (c == '1') { active_win = WIN_AI; }
                     else if (c == '2') { active_win = WIN_TERMINAL; }
-                    else if (c == '3') { active_win = WIN_TELEMETRY; }
+                    else if (c == '3') { active_win = WIN_BROWSER; }
                     else if (c == '4') { active_win = WIN_FILES; file_refresh_list(); file_update_preview(); }
+                    else if (c == '5') { active_win = WIN_TELEMETRY; }
                     else if (c == 'b' || c == 'B') { audio_chime(); }
                     else if (c == 'f' || c == 'F') { is_maximized = !is_maximized; }
                     else if (c == 's' || c == 'S') { start_menu_open = !start_menu_open; }

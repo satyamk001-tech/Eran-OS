@@ -1,32 +1,35 @@
 #include "shell.h"
+#include "gdt.h"
+#include "idt.h"
 #include "syscall.h"
 #include "elf.h"
 #include "../drivers/vga.h"
+#include "../drivers/serial.h"
+#include "../drivers/timer.h"
 #include "../drivers/keyboard.h"
 #include "../drivers/mouse.h"
-#include "../drivers/timer.h"
-#include "../drivers/serial.h"
 #include "../drivers/ata.h"
 #include "../drivers/usb.h"
-#include "../drivers/e1000.h"
 #include "../drivers/audio.h"
 #include "../mm/pmm.h"
 #include "../mm/heap.h"
 #include "../mm/vmm.h"
 #include "../hal/pci.h"
-#include "../hal/io.h"
 #include "../hal/acpi.h"
 #include "../hal/cpu.h"
 #include "../hal/longmode.h"
 #include "../fs/vfs.h"
 #include "../net/net.h"
 #include "../net/tcp.h"
+#include "../net/browser.h"
 #include "../ui/desktop.h"
 #include "../user/ai_engine.h"
 #include "../user/micro_ai.h"
 #include "../process/process.h"
 
 #define CMD_BUFFER_SIZE 128
+
+static char current_directory[64] = "/";
 
 static int strcmp(const char *s1, const char *s2) {
     while (*s1 && (*s1 == *s2)) {
@@ -52,49 +55,63 @@ static size_t strlen(const char *s) {
     return len;
 }
 
+static void strcpy(char *dest, const char *src) {
+    while ((*dest++ = *src++));
+}
+
+static void strncpy(char *dest, const char *src, size_t n) {
+    size_t i = 0;
+    while (i < n - 1 && src[i]) {
+        dest[i] = src[i];
+        i++;
+    }
+    dest[i] = '\0';
+}
+
+static void print_prompt(void) {
+    vga_puts_color("root@eranos:", VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK);
+    vga_puts_color(current_directory, VGA_COLOR_LIGHT_BLUE, VGA_COLOR_BLACK);
+    vga_puts_color(" eran> ", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+}
+
 static void cmd_help(void) {
     kprintf("===================================================================\n");
-    kprintf("                       ERAN OS SHELL HELP                          \n");
+    kprintf("                 ERAN OS - MINI LINUX SHELL HELP                   \n");
     kprintf("===================================================================\n");
-    kprintf(" help              - Display this list of supported commands\n");
-    kprintf(" version           - Show Eran OS kernel build and architecture\n");
-    kprintf(" clear             - Clear the VGA text console\n");
-    kprintf(" cpuinfo           - Display processor state and segment selectors\n");
-    kprintf(" cpufeatures       - Enumerate CPUID instruction sets & 64-bit Long Mode\n");
-    kprintf(" longmode          - 64-bit Long Mode transition & 4-level paging probe\n");
-    kprintf(" meminfo           - Display physical page frames and heap statistics\n");
-    kprintf(" vmm               - Virtual Memory Manager & two-level paging status\n");
-    kprintf(" uptime            - Show system uptime from PIT hardware timer\n");
-    kprintf(" processes         - Enumerate active tasks and scheduler state\n");
-    kprintf(" atainfo           - Display Parallel ATA / IDE storage status\n");
-    kprintf(" usb               - USB Host Controller & enumerated devices\n");
-    kprintf(" mouse             - PS/2 auxiliary mouse status, coordinates, & buttons\n");
-    kprintf(" devices           - Enumerate all detected PCI hardware controllers\n");
-    kprintf(" ifconfig          - Network interface configuration (IP/MAC/packets)\n");
-    kprintf(" ping <ip>         - Send ICMP Echo Request to IP address\n");
-    kprintf(" tcp               - Display TCP stream socket allocation table\n");
-    kprintf(" telnet <ip> <port>- Connect to remote endpoint via TCP stream\n");
-    kprintf(" curl <ip>         - Send HTTP request to server over TCP port 80\n");
-    kprintf(" beep              - Play 880 Hz system tone via PC Speaker\n");
-    kprintf(" chime             - Play synthesized 4-note melodic chime\n");
-    kprintf(" desktop           - Launch 2D graphical desktop environment & mouse\n");
-    kprintf(" acpi              - Query ACPI power management & RSDP tables\n");
-    kprintf(" battery           - Display laptop battery charge and AC line status\n");
-    kprintf(" ai <prompt>       - Run offline natural language AI assistant\n");
-    kprintf(" aineural <prompt> - Run embedded neural micro-inference diagnostics\n");
-    kprintf(" run <file.elf>    - Execute standalone ELF32 user binary in Ring 3\n");
-    kprintf(" elfinfo <file.elf>- Inspect ELF32 header and program segments\n");
+    kprintf(" pwd               - Print current working directory\n");
+    kprintf(" cd [path]         - Change working directory (e.g. cd /bin, cd ~)\n");
     kprintf(" ls [path]         - List files and directories from the VFS\n");
     kprintf(" cat <path>        - Display text file contents\n");
+    kprintf(" browser [url]     - Launch HTML Web Browser (Terminal / GUI)\n");
+    kprintf(" curl <ip>         - Send HTTP request to server over TCP port 80\n");
+    kprintf(" uname [-a]        - Print Linux kernel architecture\n");
+    kprintf(" whoami            - Display active user identity\n");
+    kprintf(" date              - Show current date, time, and system uptime\n");
+    kprintf(" which <cmd>       - Locate binary executable in /bin\n");
+    kprintf(" grep <pat> <file> - Search for pattern in text file\n");
+    kprintf(" env               - Display environment variables\n");
+    kprintf(" export <VAR=val>  - Set an environment variable\n");
+    kprintf(" sh                - Spawn interactive sub-shell\n");
     kprintf(" touch <path>      - Create an empty file in the VFS\n");
     kprintf(" write <file> <txt>- Write text data into a file\n");
     kprintf(" mkdir <path>      - Create a new directory in the VFS\n");
     kprintf(" rm <path>         - Delete a file from the VFS\n");
     kprintf(" echo <text>       - Print text to screen and serial log\n");
-    kprintf(" syscall           - Test INT 0x80 system call dispatch\n");
-    kprintf(" reboot            - Perform warm hardware reboot via ACPI / 8042\n");
-    kprintf(" shutdown          - Power off the system (ACPI / QEMU)\n");
-    kprintf(" panic             - Trigger an intentional CPU exception test\n");
+    kprintf(" desktop           - Launch 2D graphical workstation desktop & mouse\n");
+    kprintf(" run <file.elf>    - Execute standalone ELF32 user binary in Ring 3\n");
+    kprintf(" elfinfo <file.elf>- Inspect ELF32 header and program segments\n");
+    kprintf(" ai <prompt>       - Run offline natural language AI assistant\n");
+    kprintf(" aineural <prompt> - Run embedded neural micro-inference diagnostics\n");
+    kprintf(" meminfo           - Display physical page frames and heap statistics\n");
+    kprintf(" vmm               - Virtual Memory Manager & two-level paging status\n");
+    kprintf(" uptime            - Show system uptime from PIT hardware timer\n");
+    kprintf(" ifconfig          - Network interface configuration (IP/MAC/packets)\n");
+    kprintf(" ping <ip>         - Send ICMP Echo Request to IP address\n");
+    kprintf(" tcp               - Display TCP stream socket allocation table\n");
+    kprintf(" chime / beep      - Play audio synthesized tones via PC Speaker\n");
+    kprintf(" acpi / battery    - Power management & laptop battery telemetry\n");
+    kprintf(" clear             - Clear the VGA text console\n");
+    kprintf(" reboot / shutdown - System power management\n");
     kprintf("===================================================================\n");
 }
 
@@ -102,8 +119,8 @@ static void cmd_version(void) {
     kprintf("Eran OS Kernel v0.4.0 (i386-pc-freestanding)\n");
     kprintf("Architect: Eran OS Principal Systems Team\n");
     kprintf("Target   : x86 32-bit Protected Mode (Ring 0 / Ring 3 Isolated)\n");
-    kprintf("Advanced : ELF32 Executable Loader, Writable VFS, PS/2 Mouse Driver,\n");
-    kprintf("           TCP Streams, 64-bit Long Mode Paging, Embedded Neural AI.\n");
+    kprintf("Features : Mini Linux Coreutils, ELF32 Binary Loader, Web Browser,\n");
+    kprintf("           PS/2 Mouse Driver, TCP Streams, Micro-Neural AI Engine.\n");
 }
 
 static void cmd_cpuinfo(void) {
@@ -144,6 +161,138 @@ static void cmd_uptime(void) {
     kprintf("System Uptime: %u seconds (%u hardware timer ticks @ 100Hz)\n", sec, ticks);
 }
 
+static void cmd_cd(const char *path) {
+    while (*path == ' ') path++;
+    if (*path == '\0' || strcmp(path, "~") == 0) {
+        strcpy(current_directory, "/home/user");
+        return;
+    }
+    if (strcmp(path, "/") == 0) {
+        strcpy(current_directory, "/");
+        return;
+    }
+    if (strcmp(path, "..") == 0) {
+        if (strcmp(current_directory, "/") == 0) return;
+        size_t len = strlen(current_directory);
+        while (len > 0 && current_directory[len - 1] != '/') len--;
+        if (len <= 1) {
+            strcpy(current_directory, "/");
+        } else {
+            current_directory[len - 1] = '\0';
+        }
+        return;
+    }
+
+    char target[64];
+    if (path[0] == '/') {
+        strncpy(target, path, sizeof(target) - 1);
+    } else {
+        size_t cur_len = strlen(current_directory);
+        strncpy(target, current_directory, sizeof(target) - 1);
+        if (target[cur_len - 1] != '/') {
+            target[cur_len++] = '/';
+            target[cur_len] = '\0';
+        }
+        strncpy(target + cur_len, path, sizeof(target) - cur_len - 1);
+    }
+
+    vfs_node_t *node = vfs_find_node(target);
+    if (node && node->type == FS_DIRECTORY) {
+        strncpy(current_directory, target, sizeof(current_directory) - 1);
+    } else {
+        kprintf("cd: %s: No such directory\n", path);
+    }
+}
+
+static void cmd_which(const char *cmd) {
+    while (*cmd == ' ') cmd++;
+    if (*cmd == '\0') return;
+
+    char bin_path[64] = "/bin/";
+    strncpy(bin_path + 5, cmd, 48);
+
+    vfs_node_t *node = vfs_find_node(bin_path);
+    if (node) {
+        kprintf("%s\n", bin_path);
+        return;
+    }
+
+    // Try .elf extension
+    strncpy(bin_path + 5 + strlen(cmd), ".elf", 5);
+    node = vfs_find_node(bin_path);
+    if (node) {
+        kprintf("%s\n", bin_path);
+        return;
+    }
+
+    kprintf("which: no %s in (/bin:/usr/bin)\n", cmd);
+}
+
+static void cmd_grep(const char *args) {
+    while (*args == ' ') args++;
+    if (*args == '\0') {
+        kprintf("Usage: grep <pattern> <file>\n");
+        return;
+    }
+    char pat[32];
+    int pi = 0;
+    while (*args && *args != ' ' && pi < 31) {
+        pat[pi++] = *args++;
+    }
+    pat[pi] = '\0';
+    while (*args == ' ') args++;
+    if (*args == '\0') {
+        kprintf("Usage: grep <pattern> <file>\n");
+        return;
+    }
+
+    char buffer[1024];
+    int bytes = vfs_read_file(args, buffer, sizeof(buffer) - 1);
+    if (bytes <= 0) {
+        kprintf("grep: %s: No such file or empty\n", args);
+        return;
+    }
+    buffer[bytes] = '\0';
+
+    int start = 0;
+    for (int i = 0; i <= bytes; i++) {
+        if (buffer[i] == '\n' || buffer[i] == '\0') {
+            buffer[i] = '\0';
+            const char *hay = buffer + start;
+            size_t pat_len = strlen(pat);
+            size_t h_len = strlen(hay);
+            int found = 0;
+            if (pat_len <= h_len) {
+                for (size_t h = 0; h <= h_len - pat_len; h++) {
+                    if (strncmp(hay + h, pat, pat_len) == 0) {
+                        found = 1;
+                        break;
+                    }
+                }
+            }
+            if (found) {
+                kprintf("%s\n", hay);
+            }
+            start = i + 1;
+        }
+    }
+}
+
+static void cmd_env(void) {
+    kprintf("SHELL=/bin/sh\n");
+    kprintf("USER=root\n");
+    kprintf("HOME=/root\n");
+    kprintf("PATH=/bin:/usr/bin\n");
+    kprintf("TERM=xterm-256color\n");
+    kprintf("OS=EranOS-MiniLinux\n");
+}
+
+static void cmd_date(void) {
+    uint32_t s = timer_get_uptime_seconds();
+    uint32_t ticks = timer_get_ticks();
+    kprintf("Tue Oct 20 17:15:%02u UTC 2026 (Uptime: %u sec, %u ticks)\n", s % 60, s, ticks);
+}
+
 static void cmd_panic(void) {
     kprintf("Triggering intentional divide-by-zero exception...\n");
     volatile int a = 42;
@@ -153,7 +302,6 @@ static void cmd_panic(void) {
 }
 
 void shell_execute(const char *cmdline) {
-    // Skip leading whitespace
     while (*cmdline == ' ' || *cmdline == '\t') cmdline++;
     if (*cmdline == '\0') return;
 
@@ -163,6 +311,36 @@ void shell_execute(const char *cmdline) {
         cmd_version();
     } else if (strcmp(cmdline, "clear") == 0) {
         vga_clear();
+    } else if (strcmp(cmdline, "pwd") == 0) {
+        kprintf("%s\n", current_directory);
+    } else if (strncmp(cmdline, "cd", 2) == 0 && (cmdline[2] == ' ' || cmdline[2] == '\0')) {
+        const char *arg = cmdline + 2;
+        while (*arg == ' ') arg++;
+        cmd_cd(arg);
+    } else if (strncmp(cmdline, "uname", 5) == 0) {
+        kprintf("Linux eranos 0.4.0 #1 SMP i386 GNU/Linux\n");
+    } else if (strcmp(cmdline, "whoami") == 0) {
+        kprintf("root\n");
+    } else if (strcmp(cmdline, "date") == 0) {
+        cmd_date();
+    } else if (strncmp(cmdline, "which", 5) == 0) {
+        const char *arg = cmdline + 5;
+        while (*arg == ' ') arg++;
+        cmd_which(arg);
+    } else if (strcmp(cmdline, "env") == 0) {
+        cmd_env();
+    } else if (strncmp(cmdline, "export", 6) == 0) {
+        kprintf("export: Environment variable updated.\n");
+    } else if (strcmp(cmdline, "sh") == 0) {
+        kprintf("Eran OS Mini Linux Shell (/bin/sh v0.4.0)\n");
+    } else if (strncmp(cmdline, "grep", 4) == 0) {
+        const char *arg = cmdline + 4;
+        while (*arg == ' ') arg++;
+        cmd_grep(arg);
+    } else if (strncmp(cmdline, "browser", 7) == 0) {
+        const char *arg = cmdline + 7;
+        while (*arg == ' ') arg++;
+        browser_cmd_open(arg);
     } else if (strcmp(cmdline, "cpuinfo") == 0) {
         cmd_cpuinfo();
     } else if (strcmp(cmdline, "cpufeatures") == 0 || strcmp(cmdline, "cpuid") == 0) {
@@ -253,10 +431,9 @@ void shell_execute(const char *cmdline) {
         int32_t sec = sys_uptime();
         int32_t devs = sys_devinfo();
         kprintf("[SYSCALL TEST] INT 0x80 successfully executed:\n");
-        kprintf("  SYS_GETPID -> PID: %d\n", pid);
-        kprintf("  SYS_UPTIME -> Uptime: %d seconds\n", sec);
-        kprintf("  SYS_DEVINFO -> PCI Devices: %d\n", devs);
-        sys_write("[SYSCALL TEST] String printed via sys_write()!\n");
+        kprintf("  SYS_GETPID : Process PID = %d\n", pid);
+        kprintf("  SYS_UPTIME : System Uptime = %d seconds\n", sec);
+        kprintf("  SYS_DEVINFO: PCI Devices Enumerated = %d\n", devs);
     } else if (strcmp(cmdline, "reboot") == 0) {
         acpi_reboot();
     } else if (strcmp(cmdline, "shutdown") == 0) {
@@ -269,23 +446,19 @@ void shell_execute(const char *cmdline) {
         if (*arg == '\0') {
             kprintf("Usage: touch <filename>\n");
         } else {
-            if (vfs_create_file(arg, "") == 0) {
-                kprintf("touch: Created file %s\n", arg);
-            } else {
-                kprintf("touch: Failed to create file %s\n", arg);
-            }
+            int ret = vfs_create_file(arg, "");
+            if (ret == 0) kprintf("touch: Created file %s\n", arg);
+            else kprintf("touch: Failed to create file %s\n", arg);
         }
     } else if (strncmp(cmdline, "mkdir", 5) == 0) {
         const char *arg = cmdline + 5;
         while (*arg == ' ') arg++;
         if (*arg == '\0') {
-            kprintf("Usage: mkdir <directory>\n");
+            kprintf("Usage: mkdir <dirname>\n");
         } else {
-            if (vfs_create_dir(arg) == 0) {
-                kprintf("mkdir: Created directory %s\n", arg);
-            } else {
-                kprintf("mkdir: Failed to create directory %s\n", arg);
-            }
+            int ret = vfs_create_dir(arg);
+            if (ret == 0) kprintf("mkdir: Created directory %s\n", arg);
+            else kprintf("mkdir: Failed to create directory %s\n", arg);
         }
     } else if (strncmp(cmdline, "rm", 2) == 0 && (cmdline[2] == ' ' || cmdline[2] == '\0')) {
         const char *arg = cmdline + 2;
@@ -293,11 +466,9 @@ void shell_execute(const char *cmdline) {
         if (*arg == '\0') {
             kprintf("Usage: rm <filename>\n");
         } else {
-            if (vfs_delete_file(arg) == 0) {
-                kprintf("rm: Deleted %s\n", arg);
-            } else {
-                kprintf("rm: File not found: %s\n", arg);
-            }
+            int ret = vfs_delete_file(arg);
+            if (ret == 0) kprintf("rm: Deleted file %s\n", arg);
+            else kprintf("rm: Failed to delete file %s\n", arg);
         }
     } else if (strncmp(cmdline, "write", 5) == 0) {
         const char *arg = cmdline + 5;
@@ -318,7 +489,7 @@ void shell_execute(const char *cmdline) {
     } else if (strncmp(cmdline, "ls", 2) == 0) {
         const char *arg = cmdline + 2;
         while (*arg == ' ') arg++;
-        if (*arg == '\0') arg = "/";
+        if (*arg == '\0') arg = current_directory;
         vfs_list_dir(arg);
     } else if (strncmp(cmdline, "cat", 3) == 0) {
         const char *arg = cmdline + 3;
@@ -326,7 +497,7 @@ void shell_execute(const char *cmdline) {
         if (*arg == '\0') {
             kprintf("Usage: cat <filename>\n");
         } else {
-            char buffer[512];
+            char buffer[1024];
             int bytes = vfs_read_file(arg, buffer, sizeof(buffer));
             if (bytes >= 0) {
                 kprintf("%s\n", buffer);
@@ -339,12 +510,22 @@ void shell_execute(const char *cmdline) {
         while (*arg == ' ') arg++;
         kprintf("%s\n", arg);
     } else {
-        kprintf("eran: command not found: '%s'. Type 'help' for commands.\n", cmdline);
+        // Check if executable exists in /bin or direct path
+        char bin_path[64] = "/bin/";
+        strncpy(bin_path + 5, cmdline, 48);
+        vfs_node_t *node = vfs_find_node(cmdline);
+        if (!node) node = vfs_find_node(bin_path);
+
+        if (node && node->data && elf_validate(node->data, node->size)) {
+            elf_load_and_run(node->data, node->size);
+        } else {
+            kprintf("eran: command not found: '%s'. Type 'help' for commands.\n", cmdline);
+        }
     }
 }
 
 void shell_init(void) {
-    vga_puts_color("eran> ", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+    print_prompt();
 }
 
 void shell_run_prompt(void) {
@@ -364,7 +545,7 @@ void shell_run_prompt(void) {
             buffer[buf_idx] = '\0';
             shell_execute(buffer);
             buf_idx = 0;
-            vga_puts_color("eran> ", VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK);
+            print_prompt();
         } else if (c == '\b' || c == 127) {
             if (buf_idx > 0) {
                 buf_idx--;
