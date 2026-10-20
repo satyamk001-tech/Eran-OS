@@ -32,67 +32,46 @@ init:
     call puts
 
     ; --------------------------------------------------------------------------
-    ; 1. Load Kernel Sectors across Floppy Cylinder/Head Boundaries (INT 13h)
+    ; 1. Load Kernel Sectors across Floppy Cylinders/Heads (INT 13h)
+    ;    Loads 180 sectors (90 KB) starting at Cylinder 0, Head 0, Sector 2.
     ; --------------------------------------------------------------------------
-    ; Track 0, Head 0: Read remaining 17 sectors (Sectors 2 to 18)
     mov ax, 0x1000
     mov es, ax
-    xor bx, bx                  ; Destination: 0x1000:0x0000 -> 0x10000
-    mov ah, 0x02
-    mov al, 17
+    xor bx, bx                  ; Destination: 0x1000:0x0000 -> physical 0x10000
+
     mov ch, 0                   ; Cylinder 0
-    mov cl, 2                   ; Sector 2
     mov dh, 0                   ; Head 0
+    mov cl, 2                   ; Sector 2 (Sector 1 is boot sector)
+    mov bp, 180                 ; Read 180 sectors (90 KB kernel capacity)
+
+.read_sector_loop:
+    mov ah, 0x02                ; BIOS Read Sectors
+    mov al, 1                   ; Read 1 sector per iteration
     mov dl, [boot_drive]
     int 0x13
     jc disk_error
 
-    mov si, msg_ok1
-    call puts
-
-    ; Track 0, Head 1: Read 18 sectors (Sectors 1 to 18)
-    mov ax, 0x1000 + (17 * 512 / 16)
+    ; Advance destination pointer by 512 bytes (0x20 in segment: 0x20 * 16 = 512)
+    mov ax, es
+    add ax, 0x20
     mov es, ax
-    xor bx, bx
-    mov ah, 0x02
-    mov al, 18
-    mov ch, 0                   ; Cylinder 0
-    mov cl, 1                   ; Sector 1
-    mov dh, 1                   ; Head 1
-    mov dl, [boot_drive]
-    int 0x13
-    jc disk_error
 
-    mov si, msg_ok2
-    call puts
+    ; Advance to next sector in standard 1.44MB Floppy geometry (18 sectors/track)
+    inc cl
+    cmp cl, 19
+    jb .loop_dec
+    mov cl, 1                   ; Reset to sector 1
+    inc dh                      ; Next head
+    cmp dh, 2
+    jb .loop_dec
+    mov dh, 0                   ; Reset to head 0
+    inc ch                      ; Next cylinder
 
-    ; Track 1, Head 0: Read 18 sectors (Sectors 1 to 18)
-    mov ax, 0x1000 + ((17 + 18) * 512 / 16)
-    mov es, ax
-    xor bx, bx
-    mov ah, 0x02
-    mov al, 18
-    mov ch, 1                   ; Cylinder 1
-    mov cl, 1                   ; Sector 1
-    mov dh, 0                   ; Head 0
-    mov dl, [boot_drive]
-    int 0x13
-    jc disk_error
+.loop_dec:
+    dec bp
+    jnz .read_sector_loop
 
-    ; Track 1, Head 1: Read 18 sectors (Sectors 1 to 18) -> Total 71 sectors = 36 KB
-    mov ax, 0x1000 + ((17 + 18 + 18) * 512 / 16)
-    mov es, ax
-    xor bx, bx
-    mov ah, 0x02
-    mov al, 18
-    mov ch, 1                   ; Cylinder 1
-    mov cl, 1                   ; Sector 1
-    mov dh, 1                   ; Head 1
-    mov dl, [boot_drive]
-    int 0x13
-    jc disk_error
-
-    mov si, msg_ok3
+    mov si, msg_ok
     call puts
 
     ; --------------------------------------------------------------------------
@@ -216,10 +195,8 @@ gdt_descriptor:
 
 boot_drive: db 0
 
-msg_boot: db 'Eran OS Bootloader v0.2.0', ENDL, 0
-msg_ok1:  db '[BOOT] Track 0 Head 0 loaded.', ENDL, 0
-msg_ok2:  db '[BOOT] Track 0 Head 1 loaded.', ENDL, 0
-msg_ok3:  db '[BOOT] Tracks 0-1 loaded. Total 71 sectors (36 KB).', ENDL, 0
+msg_boot: db 'Eran OS Bootloader v0.3.0', ENDL, 0
+msg_ok:   db '[BOOT] 180 sectors (90 KB) loaded to 0x10000. Entering PM...', ENDL, 0
 msg_err:  db '[FATAL] Disk read error!', ENDL, 0
 
 ; ------------------------------------------------------------------------------

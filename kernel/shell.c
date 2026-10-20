@@ -5,11 +5,20 @@
 #include "../drivers/timer.h"
 #include "../drivers/serial.h"
 #include "../drivers/ata.h"
+#include "../drivers/usb.h"
+#include "../drivers/e1000.h"
+#include "../drivers/audio.h"
 #include "../mm/pmm.h"
 #include "../mm/heap.h"
+#include "../mm/vmm.h"
 #include "../hal/pci.h"
 #include "../hal/io.h"
+#include "../hal/acpi.h"
+#include "../hal/cpu.h"
 #include "../fs/vfs.h"
+#include "../net/net.h"
+#include "../ui/desktop.h"
+#include "../user/ai_engine.h"
 #include "../process/process.h"
 
 #define CMD_BUFFER_SIZE 128
@@ -40,28 +49,41 @@ static void cmd_help(void) {
     kprintf(" version           - Show Eran OS kernel build and architecture\n");
     kprintf(" clear             - Clear the VGA text console\n");
     kprintf(" cpuinfo           - Display processor state and segment selectors\n");
+    kprintf(" cpufeatures       - Enumerate CPUID instruction sets & 64-bit Long Mode\n");
     kprintf(" meminfo           - Display physical page frames and heap statistics\n");
+    kprintf(" vmm               - Virtual Memory Manager & two-level paging status\n");
     kprintf(" uptime            - Show system uptime from PIT hardware timer\n");
     kprintf(" processes         - Enumerate active tasks and scheduler state\n");
     kprintf(" atainfo           - Display Parallel ATA / IDE storage status\n");
-    kprintf(" syscall           - Test INT 0x80 system call dispatch\n");
+    kprintf(" usb               - USB Host Controller & enumerated devices\n");
     kprintf(" devices           - Enumerate all detected PCI hardware controllers\n");
+    kprintf(" ifconfig          - Network interface configuration (IP/MAC/packets)\n");
+    kprintf(" ping <ip>         - Send ICMP Echo Request to IP address\n");
+    kprintf(" beep              - Play 880 Hz system tone via PC Speaker\n");
+    kprintf(" chime             - Play synthesized 4-note melodic chime\n");
+    kprintf(" desktop           - Launch 2D graphical desktop environment\n");
+    kprintf(" acpi              - Query ACPI power management & RSDP tables\n");
+    kprintf(" battery           - Display laptop battery charge and AC line status\n");
+    kprintf(" ai <prompt>       - Run offline natural language AI assistant\n");
     kprintf(" ls [path]         - List files and directories from the VFS\n");
     kprintf(" cat <path>        - Display text file contents\n");
     kprintf(" echo <text>       - Print text to screen and serial log\n");
-    kprintf(" reboot            - Perform warm hardware reboot via 8042 controller\n");
+    kprintf(" syscall           - Test INT 0x80 system call dispatch\n");
+    kprintf(" reboot            - Perform warm hardware reboot via ACPI / 8042\n");
     kprintf(" shutdown          - Power off the system (ACPI / QEMU)\n");
     kprintf(" panic             - Trigger an intentional CPU exception test\n");
     kprintf("===================================================================\n");
 }
 
 static void cmd_version(void) {
-    kprintf("Eran OS Kernel v0.2.0 (i386-pc-freestanding)\n");
+    kprintf("Eran OS Kernel v0.3.0 (i386-pc-freestanding)\n");
     kprintf("Architect: Eran OS Principal Systems Team\n");
-    kprintf("Target   : x86 32-bit Protected Mode (Ring 0)\n");
-    kprintf("Features : GDT, IDT (32 Exceptions + 16 IRQs), PIC 8259, PIT 100Hz,\n");
+    kprintf("Target   : x86 32-bit Protected Mode (Ring 0 / Ring 3 Isolated)\n");
+    kprintf("Features : GDT+TSS, IDT (32 Exceptions + 16 IRQs), PIC 8259, PIT 100Hz,\n");
     kprintf("           PS/2 Keyboard, 16550 Serial UART, Direct VGA MMIO, Bitmap PMM,\n");
-    kprintf("           Dynamic Kernel Heap, PCI Enumeration, Virtual Filesystem.\n");
+    kprintf("           Two-Level Paging (VMM), Kernel Heap, ATA PIO, RamFS VFS,\n");
+    kprintf("           Intel e1000 NIC, IPv4/ARP/ICMP, PC Speaker Audio, Desktop UI,\n");
+    kprintf("           ACPI Power/Battery, USB Discovery, Native Offline AI Engine.\n");
 }
 
 static void cmd_cpuinfo(void) {
@@ -102,30 +124,6 @@ static void cmd_uptime(void) {
     kprintf("System Uptime: %u seconds (%u hardware timer ticks @ 100Hz)\n", sec, ticks);
 }
 
-static void cmd_reboot(void) {
-    kprintf("Rebooting Eran OS...\n");
-    uint8_t temp;
-    // Pulse reset line using 8042 keyboard controller
-    do {
-        temp = inb(0x64);
-        if (temp & 1) inb(0x60);
-    } while (temp & 2);
-    outb(0x64, 0xFE);
-    __asm__ volatile ("cli; hlt");
-}
-
-static void cmd_shutdown(void) {
-    kprintf("Shutting down Eran OS...\n");
-    // QEMU / Bochs ACPI shutdown ports
-    outw(0x604, 0x2000);
-    outw(0xB004, 0x2000);
-    outw(0x4004, 0x3400);
-    kprintf("System halted. It is now safe to turn off your computer.\n");
-    for (;;) {
-        __asm__ volatile ("cli; hlt");
-    }
-}
-
 static void cmd_panic(void) {
     kprintf("Triggering intentional divide-by-zero exception...\n");
     volatile int a = 42;
@@ -147,14 +145,43 @@ void shell_execute(const char *cmdline) {
         vga_clear();
     } else if (strcmp(cmdline, "cpuinfo") == 0) {
         cmd_cpuinfo();
+    } else if (strcmp(cmdline, "cpufeatures") == 0 || strcmp(cmdline, "cpuid") == 0) {
+        cpu_print_features();
     } else if (strcmp(cmdline, "meminfo") == 0) {
         cmd_meminfo();
+    } else if (strcmp(cmdline, "vmm") == 0) {
+        vmm_print_info();
     } else if (strcmp(cmdline, "uptime") == 0) {
         cmd_uptime();
     } else if (strcmp(cmdline, "processes") == 0) {
         process_list();
     } else if (strcmp(cmdline, "atainfo") == 0) {
         ata_print_status();
+    } else if (strcmp(cmdline, "usb") == 0) {
+        usb_print_status();
+    } else if (strcmp(cmdline, "devices") == 0) {
+        pci_print_devices();
+    } else if (strcmp(cmdline, "ifconfig") == 0) {
+        net_print_ifconfig();
+    } else if (strncmp(cmdline, "ping", 4) == 0) {
+        const char *arg = cmdline + 4;
+        while (*arg == ' ') arg++;
+        if (*arg == '\0') arg = "192.168.1.1";
+        net_ping(arg);
+    } else if (strcmp(cmdline, "beep") == 0) {
+        audio_beep();
+    } else if (strcmp(cmdline, "chime") == 0) {
+        audio_chime();
+    } else if (strcmp(cmdline, "desktop") == 0) {
+        desktop_interactive();
+    } else if (strcmp(cmdline, "acpi") == 0) {
+        acpi_print_status();
+    } else if (strcmp(cmdline, "battery") == 0) {
+        acpi_print_battery();
+    } else if (strncmp(cmdline, "ai", 2) == 0 && (cmdline[2] == ' ' || cmdline[2] == '\0')) {
+        const char *arg = cmdline + 2;
+        while (*arg == ' ') arg++;
+        ai_process_query(arg);
     } else if (strcmp(cmdline, "syscall") == 0) {
         int32_t pid = sys_getpid();
         int32_t sec = sys_uptime();
@@ -164,12 +191,10 @@ void shell_execute(const char *cmdline) {
         kprintf("  SYS_UPTIME -> Uptime: %d seconds\n", sec);
         kprintf("  SYS_DEVINFO -> PCI Devices: %d\n", devs);
         sys_write("[SYSCALL TEST] String printed via sys_write()!\n");
-    } else if (strcmp(cmdline, "devices") == 0) {
-        pci_print_devices();
     } else if (strcmp(cmdline, "reboot") == 0) {
-        cmd_reboot();
+        acpi_reboot();
     } else if (strcmp(cmdline, "shutdown") == 0) {
-        cmd_shutdown();
+        acpi_poweroff();
     } else if (strcmp(cmdline, "panic") == 0) {
         cmd_panic();
     } else if (strncmp(cmdline, "ls", 2) == 0) {

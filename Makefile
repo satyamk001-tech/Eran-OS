@@ -19,9 +19,11 @@ DRV_DIR    := drivers
 HAL_DIR    := hal
 MM_DIR     := mm
 FS_DIR     := fs
-TOOLS_DIR  := tools
-
+NET_DIR    := net
+UI_DIR     := ui
+USER_DIR   := user
 PROC_DIR   := process
+TOOLS_DIR  := tools
 
 BOOT_SRC   := $(BOOT_DIR)/boot.asm
 BOOT_BIN   := $(BUILD_DIR)/boot.bin
@@ -45,7 +47,17 @@ KERNEL_OBJS := $(BUILD_DIR)/entry.o \
                $(BUILD_DIR)/ata.o \
                $(BUILD_DIR)/pmm.o \
                $(BUILD_DIR)/heap.o \
+               $(BUILD_DIR)/vmm.o \
                $(BUILD_DIR)/pci.o \
+               $(BUILD_DIR)/usb.o \
+               $(BUILD_DIR)/e1000.o \
+               $(BUILD_DIR)/net.o \
+               $(BUILD_DIR)/audio.o \
+               $(BUILD_DIR)/gfx.o \
+               $(BUILD_DIR)/desktop.o \
+               $(BUILD_DIR)/acpi.o \
+               $(BUILD_DIR)/cpu.o \
+               $(BUILD_DIR)/ai_engine.o \
                $(BUILD_DIR)/vfs.o
 
 .PHONY: all dirs clean run run-cli debug test test-ai run-ai help
@@ -131,7 +143,47 @@ $(BUILD_DIR)/heap.o: $(MM_DIR)/heap.c | dirs
 	@echo "  [CC]   $< -> $@"
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/vmm.o: $(MM_DIR)/vmm.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/pci.o: $(HAL_DIR)/pci.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/usb.o: $(DRV_DIR)/usb.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/e1000.o: $(DRV_DIR)/e1000.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/net.o: $(NET_DIR)/net.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/audio.o: $(DRV_DIR)/audio.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/gfx.o: $(DRV_DIR)/gfx.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/desktop.o: $(UI_DIR)/desktop.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/acpi.o: $(HAL_DIR)/acpi.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/cpu.o: $(HAL_DIR)/cpu.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/ai_engine.o: $(USER_DIR)/ai_engine.c | dirs
 	@echo "  [CC]   $< -> $@"
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -153,15 +205,15 @@ $(IMG_FILE): $(BOOT_BIN) $(KERNEL_BIN)
 
 # Run in Graphical Mode (VGA Window + Keyboard input)
 run: all
-	$(QEMU) -drive format=raw,if=floppy,file=$(IMG_FILE)
+	$(QEMU) -drive format=raw,if=floppy,file=$(IMG_FILE) -net nic,model=e1000 -net user
 
 # Run in Headless CLI Mode (COM1 Serial on stdio)
 run-cli: all
-	$(QEMU) -drive format=raw,if=floppy,file=$(IMG_FILE) -display none -serial stdio
+	$(QEMU) -drive format=raw,if=floppy,file=$(IMG_FILE) -net nic,model=e1000 -net user -display none -serial stdio
 
 # Run with GDB Debug Server (waits on localhost:1234)
 debug: all
-	$(QEMU) -drive format=raw,if=floppy,file=$(IMG_FILE) -s -S
+	$(QEMU) -drive format=raw,if=floppy,file=$(IMG_FILE) -net nic,model=e1000 -net user -s -S
 
 # Run Kernel Automated Test Suite
 test: all
