@@ -1,141 +1,152 @@
 #!/usr/bin/env python3
 """
-Eran OS - Bootloader Verification Test Suite
-Automated regression test running in headless QEMU.
-Validates boot sector geometry, MBR signature, and COM1 serial transmission.
+Eran OS - Comprehensive Automated Kernel Verification Suite
+Validates:
+1. Bootloader MBR binary geometry & signature
+2. Protected mode transition & GDT loading
+3. Freestanding C kernel execution at 0x10000
+4. Interrupt Descriptor Table (IDT) & 8259 PIC remapping
+5. Hardware timer (PIT 100Hz) & PS/2 keyboard driver initialization
+6. Physical Memory Manager (PMM) frame bitmap allocator
+7. Dynamic Kernel Heap allocator (kmalloc/kfree)
+8. PCI bus peripheral device discovery
+9. Virtual Filesystem (VFS) & in-memory RamFS mount
+10. Interactive kernel shell prompt
 """
 
 import os
 import sys
 import subprocess
 import time
+import tempfile
 
 BUILD_DIR = "build"
-BIN_FILE = os.path.join(BUILD_DIR, "main.bin")
-IMG_FILE = os.path.join(BUILD_DIR, "main_floppy.img")
+BOOT_BIN = os.path.join(BUILD_DIR, "boot.bin")
+KERNEL_BIN = os.path.join(BUILD_DIR, "kernel.bin")
+IMG_FILE = os.path.join(BUILD_DIR, "eran_os.img")
 
-EXPECTED_STRINGS = [
-    "Eran OS - Stage 1 Bootloader v0.1.0",
-    "[BOOT] CPU real mode initialized (CS:0000 SP:7C00).",
-    "[BOOT] BIOS INT 10h display and COM1 serial active.",
-    "[BOOT] Drive ID preserved for Stage 2 disk load.",
-    "[BOOT] System halted. Ready for Phase 2.",
+EXPECTED_OUTPUTS = [
+    "Eran OS Bootloader v0.2.0",
+    "[BOOT] Track 0 Head 0 loaded.",
+    "[BOOT] Track 1 Head 0 loaded. Total 53 sectors.",
+    "ERAN OS - KERNEL v0.2.0",
+    "Target: x86 32-bit Protected Mode (Base: 0x10000)",
+    "IDT active (32 CPU Exceptions + 16 IRQs remapped).",
+    "Initializing 8254 PIT Timer (100 Hz)...",
+    "Initializing PS/2 Keyboard Driver (IRQ 1)...",
+    "Hardware interrupts globally enabled.",
+    "PMM initialized.",
+    "Kernel Heap initialized",
+    "Scanning PCI Bus for hardware controllers...",
+    "VFS root '/' mounted with initial system files.",
+    "[STATUS] Eran OS kernel initialization completed successfully!",
+    "eran>"
 ]
 
 def log(msg, status="INFO"):
     print(f"[{status}] {msg}")
 
-def test_binary_geometry():
-    log("Verifying raw bootloader binary geometry...", "TEST")
-    if not os.path.exists(BIN_FILE):
-        log(f"Binary file not found: {BIN_FILE}", "FAIL")
+def test_geometry():
+    log("Verifying bootloader and kernel binaries...", "TEST")
+    if not os.path.exists(BOOT_BIN):
+        log(f"Missing {BOOT_BIN}", "FAIL")
+        return False
+    if os.path.getsize(BOOT_BIN) != 512:
+        log("Bootloader is not 512 bytes", "FAIL")
         return False
 
-    size = os.path.getsize(BIN_FILE)
-    if size != 512:
-        log(f"Invalid boot sector size: {size} bytes (expected 512 bytes)", "FAIL")
-        return False
-
-    with open(BIN_FILE, "rb") as f:
+    with open(BOOT_BIN, "rb") as f:
         data = f.read()
-
-    # Verify MBR boot signature at byte offset 510-511 (0x55, 0xAA)
-    sig_low = data[510]
-    sig_high = data[511]
-    if sig_low != 0x55 or sig_high != 0xAA:
-        log(f"Invalid boot signature: 0x{sig_high:02X}{sig_low:02X} (expected 0xAA55)", "FAIL")
+    if data[510] != 0x55 or data[511] != 0xAA:
+        log("Invalid boot signature", "FAIL")
         return False
 
-    log(f"Binary size = 512 bytes, MBR signature = 0xAA55 verified.", "PASS")
-    return True
+    if not os.path.exists(KERNEL_BIN):
+        log(f"Missing {KERNEL_BIN}", "FAIL")
+        return False
 
-def test_floppy_geometry():
-    log("Verifying floppy disk image geometry...", "TEST")
+    kernel_size = os.path.getsize(KERNEL_BIN)
+    log(f"Boot sector = 512 bytes (MBR verified). Kernel binary = {kernel_size} bytes.", "PASS")
+
     if not os.path.exists(IMG_FILE):
-        log(f"Floppy image not found: {IMG_FILE}", "FAIL")
+        log(f"Missing disk image {IMG_FILE}", "FAIL")
         return False
 
-    size = os.path.getsize(IMG_FILE)
-    expected_size = 1440 * 1024  # 1,474,560 bytes
-    if size != expected_size:
-        log(f"Invalid floppy image size: {size} bytes (expected {expected_size} bytes)", "FAIL")
+    img_size = os.path.getsize(IMG_FILE)
+    if img_size != 1440 * 1024:
+        log(f"Invalid disk image size: {img_size}", "FAIL")
         return False
 
-    log(f"Floppy image size = {size} bytes (1.44 MB standard 3.5\" geometry) verified.", "PASS")
+    log(f"Disk image = {img_size} bytes (1.44MB standard geometry verified).", "PASS")
     return True
 
-def test_qemu_boot():
-    log("Running Eran OS bootloader in QEMU (headless, serial=stdio)...", "TEST")
+def test_kernel_execution():
+    log("Running Eran OS kernel in QEMU (headless, serial=file)...", "TEST")
+
+    with tempfile.NamedTemporaryFile(suffix=".log", delete=False) as tf:
+        serial_log_path = tf.name
+
     cmd = [
         "qemu-system-i386",
         "-drive", f"format=raw,if=floppy,file={IMG_FILE}",
         "-display", "none",
-        "-serial", "stdio"
+        "-serial", f"file:{serial_log_path}"
     ]
 
     try:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-        # Allow QEMU sufficient time to run BIOS post and boot sector
-        time.sleep(1.5)
+        proc = subprocess.Popen(cmd)
+        time.sleep(2.0)
         proc.terminate()
         try:
-            stdout, stderr = proc.communicate(timeout=2)
+            proc.wait(timeout=1.0)
         except subprocess.TimeoutExpired:
             proc.kill()
-            stdout, stderr = proc.communicate()
-
-    except FileNotFoundError:
-        log("qemu-system-i386 executable not found in PATH", "FAIL")
-        return False
     except Exception as e:
         log(f"Failed to execute QEMU: {e}", "FAIL")
+        if os.path.exists(serial_log_path):
+            os.unlink(serial_log_path)
         return False
 
-    # Check for expected serial banner lines
+    stdout = ""
+    if os.path.exists(serial_log_path):
+        with open(serial_log_path, "r", errors="replace") as f:
+            stdout = f.read()
+        os.unlink(serial_log_path)
+
     all_matched = True
-    for expected in EXPECTED_STRINGS:
+    for expected in EXPECTED_OUTPUTS:
         if expected in stdout:
-            log(f"Matched serial output: '{expected}'", "PASS")
+            log(f"Matched subsystem: '{expected}'", "PASS")
         else:
             log(f"Missing expected output: '{expected}'", "FAIL")
             all_matched = False
 
     if not all_matched:
-        log("QEMU stdout was:", "DIAG")
+        log("Full QEMU serial log dump was:", "DIAG")
         print(stdout)
-        if stderr:
-            log("QEMU stderr was:", "DIAG")
-            print(stderr)
         return False
 
     return True
 
 def main():
-    print("=" * 60)
-    print("  Eran OS - Bootloader Automated Verification Suite")
-    print("=" * 60)
+    print("=" * 65)
+    print("  Eran OS - Comprehensive Automated Kernel Verification Suite")
+    print("=" * 65)
 
     success = True
-    if not test_binary_geometry():
+    if not test_geometry():
         success = False
-    if not test_floppy_geometry():
-        success = False
-    if not test_qemu_boot():
+    if not test_kernel_execution():
         success = False
 
-    print("=" * 60)
+    print("=" * 65)
     if success:
-        print("[RESULT] ALL BOOT TESTS PASSED.")
-        print("=" * 60)
+        print("[RESULT] ALL OPERATING SYSTEM SUBSYSTEM TESTS PASSED.")
+        print("=" * 65)
         sys.exit(0)
     else:
-        print("[RESULT] BOOT TESTS FAILED.")
-        print("=" * 60)
+        print("[RESULT] SUBSYSTEM VERIFICATION FAILED.")
+        print("=" * 65)
         sys.exit(1)
 
 if __name__ == "__main__":

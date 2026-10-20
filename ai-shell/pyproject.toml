@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eran-shell"
+version = "0.2.0"
+description = "Eran OS - Offline AI Productivity Assistant & Sandboxed Shell"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = []
+
+[project.scripts]
+eran-shell = "eran_shell.main:main"

@@ -1,30 +1,55 @@
 # ==============================================================================
-# Eran OS - Master Makefile
+# Eran OS - Master Build System
+# Architecture: x86 (IA-32) Freestanding Kernel & Protected Mode Bootloader
 # ==============================================================================
 
 ASM        := nasm
+CC         := gcc
+LD         := ld
 QEMU       := qemu-system-i386
 PYTHON     := python3
 
-SRC_DIR    := src
+CFLAGS     := -m32 -ffreestanding -fno-pie -fno-pic -fno-stack-protector \
+              -nostdlib -O2 -Wall -Wextra -I.
+
 BUILD_DIR  := build
+BOOT_DIR   := boot
+KERNEL_DIR := kernel
+DRV_DIR    := drivers
+HAL_DIR    := hal
+MM_DIR     := mm
+FS_DIR     := fs
 TOOLS_DIR  := tools
-DOCS_DIR   := docs
 
-BOOT_SRC   := $(SRC_DIR)/main.asm
-BOOT_BIN   := $(BUILD_DIR)/main.bin
-FLOPPY_IMG := $(BUILD_DIR)/main_floppy.img
+BOOT_SRC   := $(BOOT_DIR)/boot.asm
+BOOT_BIN   := $(BUILD_DIR)/boot.bin
+KERNEL_BIN := $(BUILD_DIR)/kernel.bin
+IMG_FILE   := $(BUILD_DIR)/eran_os.img
 
-.PHONY: all dirs clean run run-cli debug test help
+# Kernel Object Files
+KERNEL_OBJS := $(BUILD_DIR)/entry.o \
+               $(BUILD_DIR)/isr.o \
+               $(BUILD_DIR)/kernel.o \
+               $(BUILD_DIR)/idt.o \
+               $(BUILD_DIR)/pic.o \
+               $(BUILD_DIR)/shell.o \
+               $(BUILD_DIR)/vga.o \
+               $(BUILD_DIR)/serial.o \
+               $(BUILD_DIR)/timer.o \
+               $(BUILD_DIR)/keyboard.o \
+               $(BUILD_DIR)/pmm.o \
+               $(BUILD_DIR)/heap.o \
+               $(BUILD_DIR)/pci.o \
+               $(BUILD_DIR)/vfs.o
 
-# Default target: build boot sector and floppy disk image
-all: dirs $(FLOPPY_IMG)
+.PHONY: all dirs clean run run-cli debug test test-ai run-ai help
 
-# Ensure build directory exists
+all: dirs $(IMG_FILE)
+
 dirs:
 	@mkdir -p $(BUILD_DIR)
 
-# Assemble 512-byte MBR boot sector
+# 1. Assemble Stage 1 Boot Sector (512 bytes MBR)
 $(BOOT_BIN): $(BOOT_SRC) | dirs
 	@echo "  [ASM]  $< -> $@"
 	$(ASM) $< -f bin -o $@
@@ -34,40 +59,112 @@ $(BOOT_BIN): $(BOOT_SRC) | dirs
 		exit 1; \
 	fi
 
-# Generate 1.44MB raw floppy disk image
-$(FLOPPY_IMG): $(BOOT_BIN)
-	@echo "  [IMG]  Creating 1.44MB floppy image: $@"
-	cp $(BOOT_BIN) $(FLOPPY_IMG)
-	truncate -s 1440k $(FLOPPY_IMG)
+# 2. Assemble 32-bit Kernel Assembly Stubs
+$(BUILD_DIR)/entry.o: $(KERNEL_DIR)/entry.asm | dirs
+	@echo "  [ASM]  $< -> $@"
+	$(ASM) $< -f elf32 -o $@
 
-# Run Eran OS in QEMU graphical mode
+$(BUILD_DIR)/isr.o: $(KERNEL_DIR)/isr.asm | dirs
+	@echo "  [ASM]  $< -> $@"
+	$(ASM) $< -f elf32 -o $@
+
+# 3. Compile Kernel C Sources
+$(BUILD_DIR)/kernel.o: $(KERNEL_DIR)/kernel.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/idt.o: $(KERNEL_DIR)/idt.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/pic.o: $(KERNEL_DIR)/pic.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/shell.o: $(KERNEL_DIR)/shell.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/vga.o: $(DRV_DIR)/vga.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/serial.o: $(DRV_DIR)/serial.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/timer.o: $(DRV_DIR)/timer.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/keyboard.o: $(DRV_DIR)/keyboard.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/pmm.o: $(MM_DIR)/pmm.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/heap.o: $(MM_DIR)/heap.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/pci.o: $(HAL_DIR)/pci.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/vfs.o: $(FS_DIR)/vfs.c | dirs
+	@echo "  [CC]   $< -> $@"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# 4. Link 32-bit Freestanding Kernel Binary
+$(KERNEL_BIN): $(KERNEL_OBJS) $(KERNEL_DIR)/linker.ld
+	@echo "  [LD]   Linking Kernel: $@"
+	$(LD) -m elf_i386 -T $(KERNEL_DIR)/linker.ld --oformat binary -o $@ $(KERNEL_OBJS)
+
+# 5. Construct 1.44MB Bootable Operating System Image
+$(IMG_FILE): $(BOOT_BIN) $(KERNEL_BIN)
+	@echo "  [IMG]  Creating bootable OS floppy image: $@"
+	dd if=/dev/zero of=$@ bs=1024 count=1440 status=none
+	dd if=$(BOOT_BIN) of=$@ bs=512 count=1 conv=notrunc status=none
+	dd if=$(KERNEL_BIN) of=$@ bs=512 seek=1 conv=notrunc status=none
+
+# Run in Graphical Mode (VGA Window + Keyboard input)
 run: all
-	$(QEMU) -drive format=raw,if=floppy,file=$(FLOPPY_IMG)
+	$(QEMU) -drive format=raw,if=floppy,file=$(IMG_FILE)
 
-# Run Eran OS in headless CLI mode with COM1 serial redirected to stdio
+# Run in Headless CLI Mode (COM1 Serial on stdio)
 run-cli: all
-	$(QEMU) -drive format=raw,if=floppy,file=$(FLOPPY_IMG) -display none -serial stdio
+	$(QEMU) -drive format=raw,if=floppy,file=$(IMG_FILE) -display none -serial stdio
 
-# Run Eran OS with GDB debugging enabled (waits for GDB on localhost:1234)
+# Run with GDB Debug Server (waits on localhost:1234)
 debug: all
-	$(QEMU) -drive format=raw,if=floppy,file=$(FLOPPY_IMG) -s -S
+	$(QEMU) -drive format=raw,if=floppy,file=$(IMG_FILE) -s -S
 
-# Run automated test suite
+# Run Kernel Automated Test Suite
 test: all
 	$(PYTHON) $(TOOLS_DIR)/test_boot.py
 
-# Clean build artifacts
+# Run AI Shell Test Suite
+test-ai:
+	$(PYTHON) $(TOOLS_DIR)/test_ai.py
+
+# Run Interactive Offline AI Shell
+run-ai:
+	$(PYTHON) ai-shell/src/eran_shell/main.py
+
+# Clean Build Artifacts
 clean:
 	@echo "  [CLEAN] Removing build directory"
 	rm -rf $(BUILD_DIR)
 
-# Help display
 help:
-	@echo "Eran OS Build System"
-	@echo "Targets:"
-	@echo "  all       - Build bootloader binary and 1.44MB floppy image (default)"
-	@echo "  run       - Launch Eran OS in QEMU with graphical window"
-	@echo "  run-cli   - Launch Eran OS in QEMU headlessly with COM1 serial on stdio"
-	@echo "  debug     - Launch QEMU paused, waiting for GDB connection on :1234"
-	@echo "  test      - Execute automated verification test suite"
+	@echo "Eran OS Build Targets:"
+	@echo "  all       - Build bootloader, kernel, and bootable disk image (default)"
+	@echo "  run       - Launch Eran OS in QEMU graphical window"
+	@echo "  run-cli   - Launch Eran OS headlessly with COM1 serial on stdio"
+	@echo "  debug     - Launch QEMU with GDB server on localhost:1234"
+	@echo "  test      - Run automated kernel regression test suite"
+	@echo "  test-ai   - Run offline AI Shell test suite"
+	@echo "  run-ai    - Launch interactive offline AI productivity shell"
 	@echo "  clean     - Remove build artifacts"
