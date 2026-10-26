@@ -2,6 +2,7 @@
 #include "pic.h"
 #include "../drivers/vga.h"
 #include "../drivers/serial.h"
+#include "../process/process.h"
 
 struct idt_entry_struct {
     uint16_t base_lo;             // Lower 16 bits of address to jump to
@@ -110,13 +111,19 @@ void isr_handler(registers_t *regs) {
     }
 }
 
-void irq_handler(registers_t *regs) {
+registers_t *irq_handler(registers_t *regs) {
     if (interrupt_handlers[regs->int_no] != 0) {
         isr_t handler = interrupt_handlers[regs->int_no];
         handler(regs);
     }
 
     pic_send_eoi((uint8_t)(regs->int_no - 32));
+
+    uint32_t switch_esp = process_get_switch_esp();
+    if (switch_esp != 0) {
+        return (registers_t *)switch_esp;
+    }
+    return regs;
 }
 
 void idt_init(void) {

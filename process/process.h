@@ -29,5 +29,7 @@ void process_exit(int code);
 process_t *process_get_current(void);
 void process_schedule(registers_t *regs);
 void process_list(void);
+uint32_t process_get_switch_esp(void);
+int process_run_sched_test(void);
 
 #endif /* ERAN_PROCESS_H */

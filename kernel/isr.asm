@@ -143,6 +143,8 @@ irq_common_stub:
     call irq_handler
     add esp, 4
 
+    mov esp, eax        ; Switch to target task context (new esp or original esp)
+
     pop eax
     mov ds, ax
     mov es, ax

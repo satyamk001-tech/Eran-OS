@@ -89,7 +89,9 @@ EXPECTED_SHELL_COMMANDS = [
     ("ai who are you", "I am the Eran OS Native AI Assistant!"),
     ("aineural inspect memory and storage", "EMBEDDED MICRO-NEURAL MODEL INFERENCE DIAGNOSTICS"),
     ("games", "ERAN OS RETRO ARCADE HUB"),
-    ("syscall", "INT 0x80 successfully executed")
+    ("syscall", "INT 0x80 successfully executed"),
+    ("memtest", "ALL MEMORY MANAGEMENT TESTS PASSED (PMM + HEAP + VMM)"),
+    ("schedtest", "Context switching genuinely alternated between tasks.")
 ]
 
 def log(msg, status="INFO"):

@@ -1,8 +1,16 @@
 #include "elf.h"
 #include "gdt.h"
 #include "../drivers/vga.h"
+#include "../process/process.h"
 
 extern void enter_user_mode(uint32_t entry_point, uint32_t user_stack);
+
+static volatile uint32_t elf_entry_target = 0;
+static volatile uint32_t elf_stack_target = 0;
+
+static void elf_process_wrapper(void) {
+    enter_user_mode(elf_entry_target, elf_stack_target);
+}
 
 int elf_validate(const void *buffer, size_t size) {
     if (!buffer || size < sizeof(elf32_header_t)) return 0;
@@ -54,11 +62,24 @@ int elf_load_and_run(const void *buffer, size_t size) {
     // Prepare user mode stack at 0x00800000 (8 MB Mark)
     uint32_t user_stack = 0x00800000;
 
-    kprintf("[ELF] Executing binary in Ring 3 User Mode (CS=0x1B, DS=0x23)...\n");
+    kprintf("[ELF] Spawning Ring 3 process for user binary (CS=0x1B, DS=0x23)...\n");
 
-    // Execute user program
-    enter_user_mode(hdr->e_entry, user_stack);
+    elf_entry_target = hdr->e_entry;
+    elf_stack_target = user_stack;
 
+    process_t *proc = process_create("user_elf", elf_process_wrapper);
+    if (!proc) {
+        kprintf("elf: Failed to allocate process for executable!\n");
+        return -1;
+    }
+
+    // Yield CPU to user process until completion
+    int max_wait = 100;
+    while (proc->state != PROCESS_TERMINATED && max_wait-- > 0) {
+        process_yield();
+    }
+
+    kprintf("[ELF] Process PID %d finished execution.\n", proc->pid);
     return 0;
 }
 

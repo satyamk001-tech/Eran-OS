@@ -119,6 +119,8 @@ static void cmd_help(void) {
     kprintf(" games             - Eran OS Arcade Gaming Hub\n");
     kprintf(" clear             - Clear the VGA text console\n");
     kprintf(" reboot / shutdown - System power management\n");
+    kprintf(" schedtest         - Multi-task context switching validation test\n");
+    kprintf(" memtest           - Heap allocator, PMM, and VMM validation test\n");
     kprintf("===================================================================\n");
 }
 
@@ -483,6 +485,10 @@ void shell_execute(const char *cmdline) {
         acpi_poweroff();
     } else if (strcmp(cmdline, "panic") == 0) {
         cmd_panic();
+    } else if (strcmp(cmdline, "schedtest") == 0) {
+        process_run_sched_test();
+    } else if (strcmp(cmdline, "memtest") == 0) {
+        heap_run_mem_test();
     } else if (strncmp(cmdline, "touch", 5) == 0) {
         const char *arg = cmdline + 5;
         while (*arg == ' ') arg++;
