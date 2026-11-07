@@ -1,0 +1,32 @@
+name: ERAN OS Kernel Build & Automated QEMU Verification
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-verify:
+    name: Build Kernel & Headless QEMU Boot Test
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install Toolchain (NASM, GCC Multilib, QEMU)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq nasm gcc-multilib qemu-system-x86 make python3
+
+      - name: Compile Bootloader & Kernel Image
+        run: |
+          make clean
+          make all
+          ls -la build/
+
+      - name: Execute Automated QEMU Headless Boot Test
+        run: |
+          python3 tools/test_kernel.py
